@@ -52,8 +52,8 @@ PayBox asks you to approve, and the freeze card lands in your wallet.
 2. Scroll to **Why not just buy?** and drag BTC to -10%. Buying $500 loses $50. Freezing $500 loses
    only today's fee, about $10.
 3. Open [card 16686](https://freeze-paybox.vercel.app/card.html?id=16686). It was bought on mainnet
-   from one message in Claude: *"BTC dipped and my salary lands in 7 days. Use my Freeze plugin to
-   lock today's price on $20 of BTC."* Everything on it is read live from the chain.
+   from one message in Claude: *"hey chat, btc dipped today but payday is in 7 days can you pull up my freeze plugin so i lock price for $20 btc"*. Claude found Freeze in the user's plugins by
+   itself. Everything on the card is read live from the chain.
 4. Open the [proof page](https://freeze-paybox.vercel.app/proof.html) and follow any step to
    Arbiscan.
 
@@ -99,7 +99,7 @@ sequenceDiagram
     participant P as PayBox
     participant F as Freeze plugin
     participant H as Hegic on Arbitrum
-    U->>A: "BTC dipped, salary in 7 days. Freeze $20 of BTC."
+    U->>A: "btc dipped, payday is in 7 days, lock price for $20 btc"
     A->>P: use_plugin freeze_quote
     P->>F: tools/call
     F->>H: read price feed and the pool's fee

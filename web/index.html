@@ -60,16 +60,16 @@
         <ol class="setup">
           <li><div><h3>Connect PayBox</h3><p>Add PayBox to Claude or ChatGPT. In Claude: Settings, Connectors, add <code>https://api.paybox.sh/mcp</code>.</p></div></li>
           <li><div><h3>Turn on Freeze</h3><p>In PayBox, open Plugins and enable Freeze. Keep a few dollars of ETH on Arbitrum; Freeze swaps a little into USDC for the fee when needed.</p></div></li>
-          <li><div><h3>Say what you want</h3><p>"BTC dipped and my salary lands in 7 days. Use Freeze to lock today's price on $20 of BTC." Approve in PayBox and you are done. If BTC rises, ask your agent to cash the card before it ends.</p></div></li>
+          <li><div><h3>Say what you want</h3><p>"btc dipped today but payday is in 7 days, can you pull up my freeze plugin so i lock price for $20 btc" Approve in PayBox and you are done. If BTC rises, ask your agent to cash the card before it ends.</p></div></li>
         </ol>
       </div>
 
       <div class="chat reveal" id="chat" aria-label="Replay of a real chat">
         <div class="chat-top"><span>Claude with PayBox</span><span class="live">Replay of a real chat</span></div>
-        <div class="msg user step">BTC dipped and my salary lands in 7 days. Use my Freeze plugin to lock today's price on $20 of BTC.</div>
-        <div class="tool step">PayBox · use_plugin · freeze_quote</div>
-        <div class="msg agent step"><b>$0.43</b> freezes BTC at <b>$81,617.28</b> on 0.00024504 BTC until 25 Oct. If BTC is higher when you use it, you keep the gain. Most you can lose: $0.43. Lock it?</div>
-        <div class="msg user step">Yes, lock it.</div>
+        <div class="msg user step">hey chat, btc dipped today but payday is in 7 days can you pull up my freeze plugin so i lock price for $20 btc</div>
+        <div class="tool step">PayBox · discover_plugins "freeze price bitcoin" · freeze_quote</div>
+        <div class="msg agent step">Frozen price <b>$81,617.28</b> on about 0.000245 BTC. Fee <b>$0.43</b>. It ends Sunday 25 Oct; I picked 8 days so it runs past your payday. Most you can lose: $0.43. Want me to lock it?</div>
+        <div class="msg user step">yeah go ahead</div>
         <div class="approve step">
           <span class="head">PayBox approval</span>
           <div class="row"><span>Allow freeze fees, up to $5 USDC</span><span class="ok">Confirmed</span></div>
