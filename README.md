@@ -14,6 +14,7 @@
   <a href="https://freeze-paybox.vercel.app/proof.html"><img src="https://img.shields.io/badge/Arbitrum-2%20mainnet%20freezes-12AAFF" alt="Mainnet freezes"></a>
   <a href="https://github.com/jenzylove/freeze/actions/workflows/verify.yml"><img src="https://github.com/jenzylove/freeze/actions/workflows/verify.yml/badge.svg" alt="Tests"></a>
   <a href="https://developer.paybox.sh"><img src="https://img.shields.io/badge/built%20for-PayBox%20by%20MoonPay-7D00FF" alt="Built for PayBox by MoonPay"></a>
+  <a href="https://x.com/Dollar782/status/2111512033762111718"><img src="https://img.shields.io/badge/demo-watch%20on%20X-111111?logo=x" alt="Demo video on X"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-111111" alt="MIT license"></a>
 </p>
 
@@ -38,7 +39,7 @@ PayBox asks you to approve, and the freeze card lands in your wallet.
 | | |
 |---|---|
 | Live site | https://freeze-paybox.vercel.app |
-| Demo video | *posted on X with the submission* |
+| Demo video | [Watch on X](https://x.com/Dollar782/status/2111512033762111718) |
 | Real freezes on Arbitrum mainnet | [Proof page](https://freeze-paybox.vercel.app/proof.html), cards [16686](https://freeze-paybox.vercel.app/card.html?id=16686) and [16685](https://freeze-paybox.vercel.app/card.html?id=16685) |
 | The freeze from one chat message | [`0x28538aa5…1afc`](https://arbiscan.io/tx/0x28538aa56aa35300f67740f1afc0a14136abc1fb49a1ba77ab72c64b28411afc) |
 | How to use it | [Three steps](#use-it-in-three-steps) |
