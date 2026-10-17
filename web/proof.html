@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Freeze proof</title>
+<meta name="description" content="What has been proven so far for Freeze, and what has not.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23050c13'/%3E%3Cpath d='M16 3l9 9-9 17L7 12z' fill='%237ee8ff'/%3E%3Cpath d='M16 3l3 9h-6zM7 12h18l-9 17z' fill='%23ffffff' fill-opacity='.35'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;600&family=Young+Serif&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="wrap top">
+  <a class="brand" href="index.html" aria-label="Freeze home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3l9 9-9 17L7 12z" fill="var(--ice)"/><path d="M16 3l3 9h-6zM7 12h18l-9 17z" fill="#fff" fill-opacity=".35"/></svg>Freeze</a>
+  <nav class="nav" aria-label="Main">
+    <a href="index.html#lookup">Find a card</a>
+    <a href="proof.html" aria-current="page">Proof</a>
+  </nav>
+</header>
+
+<main class="wrap" style="padding-bottom:5rem">
+  <div class="prose">
+    <p class="eyebrow rise">Proof</p>
+    <h1 class="rise" style="font-size:clamp(2.4rem,7vw,4.5rem);max-width:none">What is proven, and what is not yet.</h1>
+
+    <h2>The market is real</h2>
+    <p>Every Freeze is a call option bought from Hegic's pool on Arbitrum. The fees on the home page are read live from that pool, not invented. Each option is an NFT in the buyer's wallet. Anyone can look one up on the <a href="card.html?id=16684">card page</a>, for example card 16684 (ETH) or card 16681 (BTC).</p>
+
+    <h2>The fork run</h2>
+    <span class="tag">Simulated on a local fork of Arbitrum mainnet</span>
+    <p>On 17 October 2026 we copied Arbitrum mainnet to a local test chain at block 515,564,054 and ran a full freeze there. No real money moved and nothing below happened on the live chain. The test price rise was faked on the fork to see the payout.</p>
+    <ol class="runlist">
+      <li><b>1</b>Asked the pool for a fee: 0.04 ETH for 60 days cost 8.09 USDC.</li>
+      <li><b>2</b>Bought it. The test buyer paid exactly the quote, 8.09 USDC, and got a freeze card (number 16685) in their wallet.</li>
+      <li><b>3</b>The card stored the frozen price: 0.04 ETH at $2,418.67.</li>
+      <li><b>4</b>Faked a price of $2,900 on the fork. The card showed a payout of 19.25 USDC, which is ($2,900 minus $2,418.67) times 0.04.</li>
+      <li><b>5</b>A stranger could not cash the card. The owner could, and received 19.25 USDC.</li>
+    </ol>
+    <p class="small">Card 16685 exists only on that local fork. It is not on Arbitrum mainnet, so the card page will say it is not found.</p>
+
+    <h2>Real mainnet freeze through PayBox</h2>
+    <span class="tag soon">Coming</span>
+    <p>A real freeze, bought on Arbitrum mainnet through PayBox with one approval, is not done yet. When it is, its card and the Arbiscan transaction will be linked here. Until then there is nothing to link, and we are not showing anything pretending to be it.</p>
+
+    <h2>What this does not prove</h2>
+    <p>The fork run proves the pool's rules: the fee, the card, the payout and who can cash it. It does not prove that PayBox can send these transactions on Arbitrum. That is the next step.</p>
+  </div>
+</main>
+
+<footer class="foot"><div class="wrap"><span>Freeze, a plugin for PayBox by MoonPay.</span><span><a href="index.html">Home</a></span></div></footer>
+</body>
+</html>

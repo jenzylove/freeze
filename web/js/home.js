@@ -21,6 +21,7 @@ async function load() {
     $("#hero-meta").textContent = "BTC price on Arbitrum, read at " + clock();
 
     out.innerHTML = "";
+    out.classList.remove("skeleton");
     for (const a of ["BTC", "ETH"]) {
       const g = document.createElement("div");
       g.className = "fee-group";

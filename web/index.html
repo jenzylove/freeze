@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Freeze, lock today's price</title>
+<meta name="description" content="Pay a small fee to lock today's BTC or ETH price. If the price is higher when you use it, the freeze pays you the difference. The most you can lose is the fee.">
+<meta name="color-scheme" content="light dark">
+<meta property="og:title" content="Freeze. Lock today's price. Decide later.">
+<meta property="og:description" content="Pay a small fee to lock today's BTC or ETH price. The most you can lose is the fee.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23050c13'/%3E%3Cpath d='M16 3l9 9-9 17L7 12z' fill='%237ee8ff'/%3E%3Cpath d='M16 3l3 9h-6zM7 12h18l-9 17z' fill='%23ffffff' fill-opacity='.35'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;600&family=Young+Serif&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="wrap top">
+  <a class="brand" href="index.html" aria-label="Freeze home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3l9 9-9 17L7 12z" fill="var(--ice)"/><path d="M16 3l3 9h-6zM7 12h18l-9 17z" fill="#fff" fill-opacity=".35"/></svg>Freeze</a>
+  <nav class="nav" aria-label="Main">
+    <a href="#lookup">Find a card</a>
+    <a href="proof.html">Proof</a>
+  </nav>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div class="rise">
+      <p class="eyebrow">A price lock for BTC and ETH</p>
+      <h1>Lock today's price. <em>Decide later.</em></h1>
+      <p class="lede" style="margin-top:1.5rem">Pay a small fee now and the price you see stays yours.</p>
+    </div>
+    <div class="frost ticker rise d1" role="group" aria-label="Live Bitcoin price">
+      <div class="label"><span>BTC right now</span><span class="stamp">Frozen on screen</span></div>
+      <span class="num" id="hero-price" aria-live="polite">...</span>
+      <p class="meta" id="hero-meta">Reading Arbitrum...</p>
+    </div>
+  </div>
+
+  <section id="how">
+    <div class="wrap">
+      <h2>Three steps. That is all.</h2>
+      <ol class="steps">
+        <li><h3>Freeze</h3><p>Pick BTC or ETH and an amount. Pay the fee. You get a freeze card in your wallet. It remembers today's price.</p></li>
+        <li><h3>Wait</h3><p>BTC freezes last 7 to 14 days. ETH freezes last 60 to 90 days. Nothing else is owed while you wait.</p></li>
+        <li><h3>Use it or let it go</h3><p>If the price is higher, the freeze pays you the difference in USDC. If it is not, you walk away and lose only the fee.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="fees-section">
+    <div class="wrap">
+      <p class="eyebrow">Live fees</p>
+      <h2>What it costs to freeze $100 today.</h2>
+      <div class="fees skeleton" id="fees" aria-busy="true">
+        <div class="fee-group"><div class="fee-head"><h3>BTC</h3><p>...</p></div><div class="fee-row"><span>7 days</span><strong>$0.00</strong></div><div class="fee-row"><span>14 days</span><strong>$0.00</strong></div></div>
+        <div class="fee-group"><div class="fee-head"><h3>ETH</h3><p>...</p></div><div class="fee-row"><span>60 days</span><strong>$0.00</strong></div><div class="fee-row"><span>90 days</span><strong>$0.00</strong></div></div>
+      </div>
+      <div class="err" id="fees-error" hidden role="alert">
+        <p><strong>Couldn't read Arbitrum.</strong> <span id="fees-error-text"></span> No numbers are shown because we won't guess.</p>
+        <button type="button" id="retry">Retry</button>
+      </div>
+      <p class="small status" id="fees-status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <section id="try">
+    <div class="wrap">
+      <p class="eyebrow">Try it in Claude or ChatGPT with PayBox</p>
+      <h2>Just say it.</h2>
+      <p class="say">"Freeze $20 of BTC for a week."</p>
+      <p class="lede">You get the fee, the frozen price and the end date in plain words. Then one approval in PayBox, and the card is yours.</p>
+    </div>
+  </section>
+
+  <section id="lookup">
+    <div class="wrap">
+      <p class="eyebrow">Already have one?</p>
+      <h2>Look up a freeze card.</h2>
+      <form class="lookup" action="card.html" method="get">
+        <label class="small" for="cid" style="flex-basis:100%">Card number</label>
+        <input id="cid" name="id" type="text" inputmode="numeric" pattern="[0-9]{1,9}" placeholder="16684" required autocomplete="off">
+        <button type="submit">Open card</button>
+      </form>
+      <p class="small" style="margin-top:1rem">Try <a href="card.html?id=16684">16684</a> (an ETH freeze) or <a href="card.html?id=16681">16681</a> (a BTC freeze).</p>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <div class="fine">
+      <p>If the price ends below the frozen price, the card is worth nothing and the fee is gone. That fee is the most you can lose. Freeze does not predict prices or tell anyone to buy. Hegic's pool on Arbitrum sells each freeze and sets the fee, and the card goes straight to your own wallet.</p>
+    </div>
+  </div>
+</main>
+
+<footer class="foot"><div class="wrap"><span>Freeze, a plugin for PayBox by MoonPay.</span><span><a href="proof.html">Proof</a> &nbsp; <a href="https://arbiscan.io/address/0xec096ea6eB9aa5ea689b0CF00882366E92377371">Hegic contract</a></span></div></footer>
+<script type="module" src="js/home.js"></script>
+</body>
+</html>
