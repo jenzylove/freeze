@@ -6,7 +6,9 @@ const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const NS = "http://www.w3.org/2000/svg";
 const GET_ROUND = "0x9a6fc8f5"; // getRoundData(uint80)
 const ROUNDS = 144; // about the last day of BTC price updates
-let liveFee20 = null; // USDC 6 decimals, fee to freeze $20 of BTC for 7 days
+let liveFee20 = null; // USDC 6 decimals, fee to freeze $20 of BTC for 7 days (chart label)
+const VS_USD = 500; // the slider example: the largest freeze the plugin allows
+let liveFeeVs = null; // fee to freeze VS_USD of BTC for 7 days
 
 /* ---------- hero chart: real Chainlink rounds, then a line frozen at today's price ---------- */
 function el(name, attrs, parent) {
@@ -180,7 +182,10 @@ async function loadFees() {
     for (const a of ["BTC", "ETH"]) amounts[a] = usdToUnits(100, prices[a].price, ASSETS[a].decimals);
     const calls = ROWS.map(([a, d]) => ({ to: ASSETS[a].strategy, data: encodeCalculate(amounts[a], periodSeconds(d)) }));
     calls.push({ to: ASSETS.BTC.strategy, data: encodeCalculate(usdToUnits(20, b.price, 8), periodSeconds(7)) });
+    calls.push({ to: ASSETS.BTC.strategy, data: encodeCalculate(usdToUnits(VS_USD, b.price, 8), periodSeconds(7)) });
     const fees = await batch(calls);
+    const fVs = fees.pop();
+    if (fVs.ok) { try { liveFeeVs = words(fVs.result)[1]; } catch (x) { liveFeeVs = null; } }
     const f20 = fees.pop();
     if (f20.ok) { try { liveFee20 = words(f20.result)[1]; } catch (x) { liveFee20 = null; } }
 
@@ -226,7 +231,7 @@ async function loadFees() {
 }
 
 /* ---------- spot vs freeze slider ---------- */
-const money = (v) => (v < 0 ? "-$" : "+$") + Math.abs(v).toFixed(2);
+const money = (v) => (v < 0 ? "-$" : "+$") + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function setBar(bar, v, max) {
   const w = Math.min(50, (Math.abs(v) / max) * 50);
   bar.style.left = (v >= 0 ? 50 : 50 - w) + "%";
@@ -236,22 +241,22 @@ function setBar(bar, v, max) {
 function renderVersus() {
   const pct = Number($("#vs-range").value);
   $("#vs-move").textContent = (pct > 0 ? "+" : "") + pct + "%";
-  const spot = 20 * (pct / 100);
+  const spot = VS_USD * (pct / 100);
   $("#vs-spot").textContent = money(spot);
   $("#vs-spot").className = "res " + (spot >= 0 ? "up" : "down");
-  setBar($("#vs-spot-bar"), spot, 4);
-  if (liveFee20 == null) {
+  setBar($("#vs-spot-bar"), spot, VS_USD * 0.2);
+  if (liveFeeVs == null) {
     $("#vs-freeze").textContent = "no live fee";
     $("#vs-need").textContent = "Couldn't read today's fee from Arbitrum, so no number is shown.";
     $("#vs-freeze-bar").style.width = 0;
     return;
   }
-  const fee = Number(liveFee20) / 1e6;
+  const fee = Number(liveFeeVs) / 1e6;
   const fz = Math.max(0, spot) - fee;
   $("#vs-freeze").textContent = money(fz);
   $("#vs-freeze").className = "res " + (fz >= 0 ? "up" : "down");
-  setBar($("#vs-freeze-bar"), fz, 4);
-  $("#vs-need").textContent = "Needs only " + usd6(liveFee20) + " today";
+  setBar($("#vs-freeze-bar"), fz, VS_USD * 0.2);
+  $("#vs-need").textContent = "Needs only " + usd6(liveFeeVs) + " today";
 }
 $("#vs-range").addEventListener("input", renderVersus);
 
