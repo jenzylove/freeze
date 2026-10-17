@@ -85,7 +85,7 @@ function drawChart(points, fee20) {
   const upT = el("text", { class: "zlabel", x: lx, y: Math.max(top - 6, ny - (narrow ? 80 : 52)) }, labels);
   upT.textContent = narrow ? "Up: the gain is yours" : "Price goes up: the gain is yours";
   const dnT = el("text", { class: "zlabel soft", x: lx, y: Math.min(bottom + 4, ny + (narrow ? 100 : 62)) }, labels);
-  dnT.textContent = narrow ? (fee20 != null ? `Down: you lose ${usd6(fee20)}` : "Down: only the fee") : fee20 != null ? `Price goes down: you lose ${usd6(fee20)}, nothing more` : "Price goes down: you lose only the fee";
+  dnT.textContent = narrow ? (fee20 != null ? `Down: $20 freeze costs ${usd6(fee20)}` : "Down: you lose only the fee") : fee20 != null ? `Price goes down: a $20, 7 day freeze costs you ${usd6(fee20)} today` : "Price goes down: you lose only the fee";
   const fz = el("text", { class: "axis", x: W - 4, y: ny - 10, "text-anchor": "end" }, labels);
   fz.textContent = "frozen at " + usd8(now.p).replace(/\.\d\d$/, "");
 
