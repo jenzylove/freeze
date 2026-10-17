@@ -164,6 +164,31 @@ export function encodeUint(sel: string, v: bigint): string {
   return sel + word(v);
 }
 
+export const UNISWAP = {
+  router: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45", // SwapRouter02 on Arbitrum
+  weth: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+  fee: 500n, // WETH/USDC.e 0.05% pool 0xC31E54c7a869B9FcBEcc14363CF510d1c41fa443
+} as const;
+
+/** exactInputSingle: ETH sent as value, USDC.e out to `to`, never less than minOut. */
+export function encodeSwapEthToUsdce(to: string, amountIn: bigint, minOut: bigint): string {
+  return (
+    "0x04e45aaf" +
+    addr(UNISWAP.weth) +
+    addr(HEGIC.usdce) +
+    word(UNISWAP.fee) +
+    addr(to) +
+    word(amountIn) +
+    word(minOut) +
+    word(0n)
+  );
+}
+
+/** USD (6 decimals) -> wei at an ETH price (8 decimals). Rounds up so the swap covers the target. */
+export function usd6ToWei(usd6: bigint, price1e8: bigint): bigint {
+  return (usd6 * 10n ** 20n + price1e8 - 1n) / price1e8;
+}
+
 /** Split an eth_call result into 32-byte words. */
 export function words(hex: string): bigint[] {
   const h = hex.startsWith("0x") ? hex.slice(2) : hex;

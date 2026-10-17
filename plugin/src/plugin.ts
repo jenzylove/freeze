@@ -20,6 +20,9 @@ import {
   encodePayOff,
   encodeTransfer,
   encodeUint,
+  encodeSwapEthToUsdce,
+  usd6ToWei,
+  UNISWAP,
   endDateIso,
   int256,
   periodSeconds,
@@ -295,6 +298,37 @@ function createServer() {
       return {
         ...proposal,
         content: [{ type: "text" as const, text: `Give freeze card ${card} (${c.view.amount} frozen at ${c.view.frozen_price}) to ${to}. Approve in PayBox.` }],
+      };
+    },
+  );
+
+  server.registerTool(
+    "freeze_fund",
+    {
+      title: "Freeze: get USDC.e for fees",
+      description:
+        "Proposes swapping a little ETH on Arbitrum into USDC.e (what freeze fees are paid in) through Uniswap, with at most 2% slippage. Use when freeze_lock says the wallet lacks USDC.e. One transaction; the ETH is sent as value, no approval needed.",
+      inputSchema: z
+        .object({ usd: z.number().min(0.5).max(100).describe("How many dollars of USDC.e to get."), owner })
+        .strict(),
+      outputSchema: evmOutputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ usd: dollars, owner: who }) => {
+      const [feedHex] = await readMany([{ to: ASSETS.ETH.feed, data: SEL.latestRoundData }]);
+      const price = int256(wordAt(feedHex!, 1));
+      const target = BigInt(Math.round(dollars * 1e6));
+      const wei = usd6ToWei(target, price);
+      const minOut = (target * 98n) / 100n;
+      const proposal = proposeEvm({ chain: ARBITRUM, to: UNISWAP.router, value: wei.toString(), data: encodeSwapEthToUsdce(who, wei, minOut) });
+      return {
+        ...proposal,
+        content: [
+          {
+            type: "text" as const,
+            text: `Swap ${units(wei, 18, 8)} ETH (about ${usd6(target)}) for at least ${usd6(minOut)} USDC.e on Uniswap, Arbitrum. Approve in PayBox, then freeze.`,
+          },
+        ],
       };
     },
   );
