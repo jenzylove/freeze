@@ -1,0 +1,24 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.key
+*keypair*.json
+id.json
+wallets/
+.demo/
+# deps & build
+node_modules/
+dist/
+.next/
+out/
+target/
+cache/
+broadcast/
+contracts/out/
+contracts/cache/
+.vercel/
+.anchor/
+test-ledger/
+*.log
+.DS_Store
