@@ -47,7 +47,7 @@
       </div>
       <svg class="chart" id="chart" viewBox="0 0 1000 440" role="img" aria-label="Recent BTC price from Arbitrum, with a line frozen at today's price"></svg>
       <div class="fail" id="chart-fail" hidden role="alert"><p><strong>Couldn't read Arbitrum.</strong> <span id="chart-fail-text"></span> No chart is drawn because we won't guess.</p><button type="button" id="chart-retry">Retry</button></div>
-      <figcaption class="stage-meta small" id="stage-cap"><span id="hero-meta">Reading the BTC price feed on Arbitrum...</span><span>Every point is a real Chainlink price update.</span></figcaption>
+      <figcaption class="stage-meta small" id="stage-cap"><span id="hero-meta">Reading the BTC price feed on Arbitrum...</span><span>Every point is a real price update, read from Arbitrum.</span></figcaption>
     </figure>
   </div>
 
@@ -59,7 +59,7 @@
         <p class="lede">Freeze is a plugin for PayBox, the wallet your AI agent can use. No new app, no exchange account. You talk, PayBox asks you to approve, the card lands in your wallet.</p>
         <ol class="setup">
           <li><div><h3>Connect PayBox</h3><p>Add PayBox to Claude or ChatGPT. In Claude: Settings, Connectors, add <code>https://api.paybox.sh/mcp</code>.</p></div></li>
-          <li><div><h3>Turn on Freeze</h3><p>In PayBox, open Plugins and enable Freeze. Keep a few dollars of ETH or USDC on Arbitrum for the fee.</p></div></li>
+          <li><div><h3>Turn on Freeze</h3><p>In PayBox, open Plugins and enable Freeze. Keep a few dollars of ETH on Arbitrum; Freeze swaps a little into USDC for the fee when needed.</p></div></li>
           <li><div><h3>Say what you want</h3><p>"BTC dipped and my salary lands in 7 days. Use Freeze to lock today's price on $20 of BTC." Approve in PayBox and you are done.</p></div></li>
         </ol>
       </div>
@@ -90,12 +90,12 @@
         <p class="small" id="vs-note">Using today's live fee for a 7 day BTC freeze.</p>
       </div>
       <div class="slider-box reveal">
-        <div class="move"><span class="small">If BTC moves this much by the end</span><span class="v" id="vs-move">+10%</span></div>
-        <input type="range" id="vs-range" min="-20" max="20" step="1" value="10" aria-label="BTC price move in percent">
+        <div class="move"><span class="small">If BTC moves this much by the end</span><span class="v" id="vs-move">-10%</span></div>
+        <input type="range" id="vs-range" min="-20" max="20" step="1" value="-10" aria-label="BTC price move in percent">
         <div class="scale"><span>-20%</span><span>0</span><span>+20%</span></div>
         <div class="outcome">
           <div class="lane">
-            <div class="row"><span class="name">Buy $500 of BTC today</span><span class="res" id="vs-spot">+$50.00</span></div>
+            <div class="row"><span class="name">Buy $500 of BTC today</span><span class="res" id="vs-spot">-$50.00</span></div>
             <div class="track"><span class="bar" id="vs-spot-bar"></span></div>
             <span class="need">Needs $500.00 today</span>
           </div>
@@ -143,9 +143,9 @@
   <div class="wrap">
     <div class="foot-grid">
       <div><p class="foot-say">Lock today's price. <em>Decide later.</em></p><p class="small">A plugin for PayBox by MoonPay.</p></div>
-      <div><h4>Product</h4><ul><li><a href="index.html#use">How it works</a></li><li><a href="index.html#versus">Freeze vs buying</a></li><li><a href="index.html#fees-section">Live fees</a></li><li><a href="index.html#lookup">Find a card</a></li></ul></div>
-      <div><h4>Proof</h4><ul><li><a href="proof.html">Mainnet freezes</a></li><li><a href="card.html?id=16686">Card 16686</a></li><li><a href="https://arbiscan.io/address/0xec096ea6eB9aa5ea689b0CF00882366E92377371" target="_blank" rel="noopener">Hegic contract</a></li></ul></div>
-      <div><h4>Built on</h4><ul><li><a href="https://paybox.sh" target="_blank" rel="noopener">PayBox by MoonPay</a></li><li><a href="https://www.hegic.co" target="_blank" rel="noopener">Hegic options</a></li><li><a href="https://arbitrum.io" target="_blank" rel="noopener">Arbitrum</a></li><li><a href="https://data.chain.link" target="_blank" rel="noopener">Chainlink prices</a></li></ul></div>
+      <div><h4>Freeze</h4><ul><li><a href="index.html#use">How it works</a></li><li><a href="index.html#versus">Freeze vs buying</a></li><li><a href="index.html#fees-section">Today's fees</a></li></ul></div>
+      <div><h4>Your cards</h4><ul><li><a href="index.html#lookup">Find a card</a></li><li><a href="proof.html">Real freezes</a></li></ul></div>
+      <div><h4>Start</h4><ul><li><a href="index.html#start">Set up in 3 steps</a></li><li><a href="https://app.paybox.sh" target="_blank" rel="noopener">Open PayBox</a></li></ul></div>
     </div>
     <p class="wordmark" aria-hidden="true">Freeze</p>
     <div class="foot-base"><p>If the price ends at or below the frozen price, the card pays nothing and the fee is gone. That fee is the most you can lose. Freeze does not predict prices or tell anyone to buy.</p><span>2026</span></div>

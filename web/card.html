@@ -18,8 +18,10 @@
 <header class="wrap top">
   <a class="brand" href="index.html" aria-label="Freeze home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3l9 9-9 17L7 12z" fill="var(--ice)"/><path d="M16 3l3 9h-6zM7 12h18l-9 17z" fill="#fff" fill-opacity=".35"/></svg>Freeze</a>
   <nav class="nav" aria-label="Main">
-    <a href="index.html#lookup">Find a card</a>
+    <a class="hide-sm" href="index.html#use">How it works</a>
+    <a class="hide-sm" href="index.html#lookup">Find a card</a>
     <a href="proof.html">Proof</a>
+    <a class="pill" href="index.html#start">Get started</a>
   </nav>
 </header>
 
@@ -28,7 +30,7 @@
     <h2>Which card?</h2>
     <p class="lede">Enter a card number to see it live.</p>
     <form class="lookup" action="card.html" method="get">
-      <input name="id" type="text" inputmode="numeric" pattern="[0-9]{1,9}" placeholder="16684" required aria-label="Card number">
+      <input name="id" type="text" inputmode="numeric" pattern="[0-9]{1,9}" placeholder="16686" required aria-label="Card number">
       <button type="submit">Open card</button>
     </form>
   </div>
@@ -44,13 +46,13 @@
 
   <div id="state-notfound" class="centerbox" hidden>
     <h2>No card with that number.</h2>
-    <p class="lede">Arbitrum has no active option under that number. Check the number and try again.</p>
+    <p class="lede">There is no freeze card with that number on Arbitrum. Check the number and try again.</p>
     <a class="btn quiet" href="index.html#lookup">Look up another</a>
   </div>
 
   <div id="state-notfreeze" class="centerbox" hidden>
     <h2>Not a Freeze card.</h2>
-    <p class="lede">This is a Hegic option, but not a plain BTC or ETH price lock, so Freeze does not show it.</p>
+    <p class="lede">This card exists, but it is not a plain BTC or ETH price lock, so Freeze does not show it.</p>
     <a class="btn quiet" href="index.html#lookup">Look up another</a>
   </div>
 
@@ -83,9 +85,9 @@
   <div class="wrap">
     <div class="foot-grid">
       <div><p class="foot-say">Lock today's price. <em>Decide later.</em></p><p class="small">A plugin for PayBox by MoonPay.</p></div>
-      <div><h4>Product</h4><ul><li><a href="index.html#use">How it works</a></li><li><a href="index.html#versus">Freeze vs buying</a></li><li><a href="index.html#fees-section">Live fees</a></li><li><a href="index.html#lookup">Find a card</a></li></ul></div>
-      <div><h4>Proof</h4><ul><li><a href="proof.html">Mainnet freezes</a></li><li><a href="card.html?id=16686">Card 16686</a></li><li><a href="https://arbiscan.io/address/0xec096ea6eB9aa5ea689b0CF00882366E92377371" target="_blank" rel="noopener">Hegic contract</a></li></ul></div>
-      <div><h4>Built on</h4><ul><li><a href="https://paybox.sh" target="_blank" rel="noopener">PayBox by MoonPay</a></li><li><a href="https://www.hegic.co" target="_blank" rel="noopener">Hegic options</a></li><li><a href="https://arbitrum.io" target="_blank" rel="noopener">Arbitrum</a></li><li><a href="https://data.chain.link" target="_blank" rel="noopener">Chainlink prices</a></li></ul></div>
+      <div><h4>Freeze</h4><ul><li><a href="index.html#use">How it works</a></li><li><a href="index.html#versus">Freeze vs buying</a></li><li><a href="index.html#fees-section">Today's fees</a></li></ul></div>
+      <div><h4>Your cards</h4><ul><li><a href="index.html#lookup">Find a card</a></li><li><a href="proof.html">Real freezes</a></li></ul></div>
+      <div><h4>Start</h4><ul><li><a href="index.html#start">Set up in 3 steps</a></li><li><a href="https://app.paybox.sh" target="_blank" rel="noopener">Open PayBox</a></li></ul></div>
     </div>
     <p class="wordmark" aria-hidden="true">Freeze</p>
     <div class="foot-base"><p>If the price ends at or below the frozen price, the card pays nothing and the fee is gone. That fee is the most you can lose. Freeze does not predict prices or tell anyone to buy.</p><span>2026</span></div>
