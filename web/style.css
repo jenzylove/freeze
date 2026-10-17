@@ -14,9 +14,9 @@
   --shadow: 0 24px 70px rgba(20, 70, 100, 0.14);
   --good: #0a6fa8;
   --bad: #a3321f;
-  --display: "Instrument Serif", Georgia, serif;
-  --body: "Geist", system-ui, sans-serif;
-  --mono: "Geist Mono", ui-monospace, Consolas, monospace;
+  --display: "Satoshi", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body: "Satoshi", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -45,8 +45,9 @@ body {
   background-attachment: fixed;
   color: var(--ink);
   font-family: var(--body);
-  font-size: 1.0625rem;
+  font-size: 1rem;
   line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
   min-height: 100vh;
 }
@@ -60,7 +61,7 @@ a:hover { text-decoration-thickness: 2px; }
 
 /* header */
 .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: 1.25rem; padding-bottom: 1.25rem; }
-.brand { display: inline-flex; align-items: center; gap: 0.55rem; font-family: var(--display); font-size: 1.75rem; line-height: 1; color: var(--ink); text-decoration: none; }
+.brand { display: inline-flex; align-items: center; gap: 0.5rem; font-family: var(--display); font-weight: 700; letter-spacing: -0.03em; font-size: 1.35rem; line-height: 1; color: var(--ink); text-decoration: none; }
 .brand svg { flex: none; width: 1.4rem; height: 1.4rem; }
 .nav { display: flex; align-items: center; gap: 1.25rem; font-size: 0.95rem; white-space: nowrap; }
 .nav a { color: var(--soft); text-decoration: none; }
@@ -70,13 +71,14 @@ a:hover { text-decoration-thickness: 2px; }
 @media (max-width: 520px) { .nav .hide-sm { display: none; } .brand { font-size: 1.45rem; } }
 
 /* type */
-h1, h2, h3 { font-family: var(--display); font-weight: 400; line-height: 1; margin: 0; letter-spacing: -0.015em; }
-h1 { font-size: clamp(3.2rem, 10.5vw, 8rem); }
-h1 em, h2 em { font-style: italic; color: var(--ice); }
-h2 { font-size: clamp(2.4rem, 6vw, 4.4rem); margin-bottom: 1.25rem; }
-h3 { font-size: clamp(1.5rem, 3vw, 2rem); }
+h1, h2, h3 { font-family: var(--display); font-weight: 330; line-height: 1.02; margin: 0; letter-spacing: -0.035em; }
+h1 { font-size: clamp(2.5rem, 6.2vw, 5.4rem); letter-spacing: -0.045em; }
+h1 em, h2 em { font-style: normal; font-weight: 700; color: var(--ice); }
+h1 em { display: block; }
+h2 { font-size: clamp(2rem, 4.2vw, 3.4rem); margin-bottom: 1.25rem; }
+h3 { font-size: clamp(1.25rem, 2.2vw, 1.5rem); font-weight: 500; letter-spacing: -0.02em; }
 p { margin: 0 0 1rem; }
-.lede { font-size: clamp(1.1rem, 2.2vw, 1.35rem); color: var(--soft); max-width: 34rem; }
+.lede { font-size: clamp(1.05rem, 1.8vw, 1.2rem); color: var(--soft); max-width: 34rem; }
 .eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ice); margin-bottom: 1rem; }
 .small { font-size: 0.9rem; color: var(--soft); }
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -102,6 +104,7 @@ section { padding: clamp(4rem, 10vw, 8rem) 0; }
 .chart .zlabel { font-family: var(--body); font-size: 15px; fill: var(--ink); }
 .chart .zlabel.soft { fill: var(--soft); }
 .chart .zlabel b { font-weight: 600; }
+.chart .mono-ish { font-family: var(--mono); font-size: 0.85em; fill: var(--faint); }
 .chart.narrow .zlabel { font-size: 32px; }
 .chart.narrow .axis { font-size: 28px; }
 .chart .now-dot { fill: var(--ice); }
@@ -137,7 +140,7 @@ button:hover, .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 26px 
 .setup li { counter-increment: s; display: grid; grid-template-columns: 3rem 1fr; gap: 0 1rem; padding: 1.4rem 0; border-top: 1px solid var(--line); }
 .setup li:last-child { border-bottom: 1px solid var(--line); }
 .setup li::before { content: "0" counter(s); font-family: var(--mono); font-size: 0.85rem; color: var(--ice); padding-top: 0.45rem; }
-.setup h3 { font-size: 1.6rem; margin-bottom: 0.35rem; }
+.setup h3 { font-size: 1.3rem; margin-bottom: 0.35rem; }
 .setup p { margin: 0; color: var(--soft); }
 .setup code { font-family: var(--mono); font-size: 0.85em; background: color-mix(in srgb, var(--ice) 9%, transparent); padding: 0.1rem 0.4rem; border-radius: 4px; }
 
@@ -161,7 +164,7 @@ button:hover, .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 26px 
 .approve .head { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--soft); }
 .mini-card { align-self: flex-start; display: grid; gap: 0.2rem; text-decoration: none; color: var(--ink); border: 1px solid color-mix(in srgb, var(--ice) 45%, transparent); border-radius: 14px; padding: 0.9rem 1.1rem; background: color-mix(in srgb, var(--ice) 7%, transparent); }
 .mini-card .k { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ice); }
-.mini-card .v { font-family: var(--display); font-size: 2rem; line-height: 1; }
+.mini-card .v { font-family: var(--mono); font-weight: 500; font-size: 1.6rem; letter-spacing: -0.04em; line-height: 1.1; }
 .mini-card:hover { border-color: var(--ice); }
 .typing { align-self: flex-start; display: inline-flex; gap: 4px; padding: 0.9rem 1rem; border-radius: 16px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
 .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--soft); animation: blink 1s infinite; }
@@ -199,7 +202,7 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .fees { display: grid; gap: 2rem; }
 @media (min-width: 800px) { .fees { grid-template-columns: 1fr 1fr; gap: 4rem; } }
 .fee-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; border-bottom: 1px solid var(--ink); padding-bottom: 0.6rem; }
-.fee-head h3 { font-size: 2.4rem; }
+.fee-head h3 { font-size: 1.9rem; font-weight: 700; }
 .fee-head p { margin: 0; color: var(--soft); font-family: var(--mono); font-size: 0.9rem; }
 .fee-row { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--line); }
 .fee-row strong { font-family: var(--mono); font-weight: 500; font-size: 1.35rem; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
@@ -225,7 +228,7 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .fcard { container-type: inline-size; padding: 1.5rem 1.25rem 2rem; max-width: 40rem; }
 @media (min-width: 700px) { .fcard { padding: 2.25rem 2.25rem 2.5rem; } }
 .fcard .row1 { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--soft); }
-.fcard .asset { font-family: var(--display); font-size: 1.6rem; letter-spacing: 0; text-transform: none; color: var(--ink); }
+.fcard .asset { font-family: var(--display); font-weight: 700; font-size: 1.5rem; letter-spacing: 0; text-transform: none; color: var(--ink); }
 .fcard .state { color: var(--ice); }
 .fcard.is-ended { filter: saturate(0.2); opacity: 0.85; }
 .fcard .cap { margin: 1.5rem 0 0; font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--soft); }
@@ -242,14 +245,14 @@ dl.facts dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; 
 dl.facts .big dd { font-family: var(--mono); font-size: 1.6rem; letter-spacing: -0.03em; line-height: 1.1; color: var(--ice); }
 .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
 .centerbox { max-width: 36rem; padding: 2rem 0; }
-.centerbox h2 { font-size: clamp(2rem, 5vw, 3rem); }
+.centerbox h2 { font-size: clamp(1.8rem, 4vw, 2.6rem); }
 .err { border-left: 3px solid var(--bad); padding: 0.5rem 0 0.5rem 1rem; margin: 1rem 0; }
 .err p { margin: 0 0 0.75rem; }
 
 /* proof */
 .prose { max-width: 44rem; }
-.prose h1 { font-size: clamp(2.8rem, 8vw, 5.5rem); }
-.prose h2 { margin-top: 3.5rem; font-size: clamp(2rem, 5vw, 3rem); }
+.prose h1 { font-size: clamp(2.4rem, 5.5vw, 4.4rem); }
+.prose h2 { margin-top: 3.5rem; font-size: clamp(1.7rem, 3.5vw, 2.4rem); }
 .tag { display: inline-block; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ice-ink); background: var(--ice); padding: 0.25rem 0.6rem; border-radius: 4px; margin-bottom: 1rem; }
 .tag.soon { background: transparent; color: var(--ice); box-shadow: inset 0 0 0 1px var(--ice); }
 .runlist { list-style: none; padding: 0; margin: 1.5rem 0; }
@@ -266,9 +269,9 @@ footer.foot { border-top: 1px solid var(--line); margin-top: 2rem; padding: clam
 .foot-grid ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; }
 .foot-grid a { color: var(--soft); text-decoration: none; }
 .foot-grid a:hover { color: var(--ink); }
-.foot-say { font-family: var(--display); font-size: 1.7rem; line-height: 1.15; color: var(--ink); max-width: 18ch; margin: 0 0 1rem; }
-.foot-say em { color: var(--ice); }
-.wordmark { font-family: var(--display); font-size: clamp(6rem, 26vw, 22rem); line-height: 0.8; letter-spacing: -0.04em; margin: 3rem 0 0; color: transparent; -webkit-text-stroke: 1px color-mix(in srgb, var(--ice) 55%, transparent); user-select: none; white-space: nowrap; }
+.foot-say { font-family: var(--display); font-weight: 330; letter-spacing: -0.03em; font-size: 1.6rem; line-height: 1.15; color: var(--ink); max-width: 18ch; margin: 0 0 1rem; }
+.foot-say em { color: var(--ice); font-style: normal; font-weight: 700; }
+.wordmark { font-family: var(--display); font-weight: 900; font-size: clamp(6rem, 26vw, 22rem); line-height: 0.8; letter-spacing: -0.06em; margin: 3rem 0 0; color: transparent; -webkit-text-stroke: 1px color-mix(in srgb, var(--ice) 55%, transparent); user-select: none; white-space: nowrap; }
 .foot-base { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem 2rem; border-top: 1px solid var(--line); padding-top: 1.25rem; margin-top: 1.5rem; font-size: 0.85rem; }
 .foot-base p { margin: 0; max-width: 46rem; }
 
