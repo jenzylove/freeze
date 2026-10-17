@@ -61,8 +61,8 @@ a:hover { text-decoration-thickness: 2px; }
 
 /* header */
 .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: 1.25rem; padding-bottom: 1.25rem; }
-.brand { display: inline-flex; align-items: center; gap: 0.5rem; font-family: var(--display); font-weight: 700; letter-spacing: -0.03em; font-size: 1.35rem; line-height: 1; color: var(--ink); text-decoration: none; }
-.brand svg { flex: none; width: 1.4rem; height: 1.4rem; }
+.brand { display: inline-flex; align-items: center; gap: 0.55rem; font-family: var(--display); font-weight: 900; letter-spacing: -0.05em; font-size: 1.5rem; line-height: 1; color: var(--ink); text-decoration: none; }
+.brand svg { flex: none; width: 2rem; height: 2rem; }
 .nav { display: flex; align-items: center; gap: 1.25rem; font-size: 0.95rem; white-space: nowrap; }
 .nav a { color: var(--soft); text-decoration: none; }
 .nav a:hover, .nav a[aria-current] { color: var(--ink); }
