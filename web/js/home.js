@@ -6,7 +6,9 @@ const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const NS = "http://www.w3.org/2000/svg";
 const GET_ROUND = "0x9a6fc8f5"; // getRoundData(uint80)
 const ROUNDS = 144; // about the last day of BTC price updates
-let liveFee20 = null; // USDC 6 decimals, fee to freeze $20 of BTC for 7 days (chart label)
+const CHART_DAYS = { BTC: 7, ETH: 60 }; // the shortest freeze each coin sells
+const liveFee20 = { BTC: null, ETH: null }; // USDC 6 decimals, fee to freeze $20 for CHART_DAYS (chart label)
+let chartAsset = "BTC";
 const VS_USD = 500; // the slider example: the largest freeze the plugin allows
 let liveFeeVs = null; // fee to freeze VS_USD of BTC for 7 days
 
@@ -18,8 +20,8 @@ function el(name, attrs, parent) {
   return n;
 }
 
-async function history() {
-  const [latest] = await batch([priceCall("BTC")]);
+async function history(asset) {
+  const [latest] = await batch([priceCall(asset)]);
   if (!latest.ok) throw new Error("Price feed read failed.");
   const w = words(latest.result);
   const id = w[0];
@@ -27,7 +29,7 @@ async function history() {
   const ids = [];
   for (let k = 1n; k <= BigInt(ROUNDS); k++) ids.push(id - k);
   for (let i = 0; i < ids.length; i += 48) {
-    const res = await batch(ids.slice(i, i + 48).map((r) => ({ to: ASSETS.BTC.feed, data: GET_ROUND + word(r) })));
+    const res = await batch(ids.slice(i, i + 48).map((r) => ({ to: ASSETS[asset].feed, data: GET_ROUND + word(r) })));
     for (const r of res) {
       if (!r.ok) continue;
       const x = words(r.result);
@@ -40,7 +42,7 @@ async function history() {
   return points;
 }
 
-function drawChart(points, fee20) {
+function drawChart(points, fee20, days) {
   const svg = $("#chart");
   svg.innerHTML = "";
   const narrow = svg.getBoundingClientRect().width < 640;
@@ -89,7 +91,7 @@ function drawChart(points, fee20) {
   const dnT = el("text", { class: "zlabel soft", x: lx, y: Math.min(bottom + 4, ny + (narrow ? 100 : 62)) }, labels);
   const dnLines = narrow
     ? ["Down: you lose the fee", fee20 != null ? `${usd6(fee20)} on a $20 freeze` : ""]
-    : ["Price goes down: you lose only the fee", fee20 != null ? `${usd6(fee20)} today on a $20, 7 day freeze` : ""];
+    : ["Price goes down: you lose only the fee", fee20 != null ? `${usd6(fee20)} today on a $20, ${days} day freeze` : ""];
   dnLines.forEach((t, i) => { if (!t) return; const ts = el("tspan", { x: lx, dy: i ? "1.4em" : 0 }, dnT); ts.textContent = t; if (i) ts.setAttribute("class", "mono-ish"); });
   const fz = el("text", { class: "axis", x: W - 4, y: ny - 10, "text-anchor": "end" }, labels);
   fz.textContent = "frozen at " + usd8(now.p).replace(/\.\d\d$/, "");
@@ -100,7 +102,7 @@ function drawChart(points, fee20) {
   const a2 = el("text", { class: "axis", x: nx, y: H - 8, "text-anchor": "middle" }, svg);
   a2.textContent = "now";
   const a3 = el("text", { class: "axis", x: W, y: H - 8, "text-anchor": "end" }, svg);
-  a3.textContent = narrow ? "7 days" : "next 7 days";
+  a3.textContent = narrow ? days + " days" : "next " + days + " days";
 
   if (REDUCE) return;
   const len = line.getTotalLength();
@@ -153,11 +155,14 @@ function countTo(node, target) {
 async function loadChart() {
   $("#chart-fail").hidden = true;
   try {
-    const pts = await history();
+    const asset = chartAsset;
+    const pts = await history(asset);
+    if (asset !== chartAsset) return; // the visitor switched coins while this was loading
     const last = pts[pts.length - 1];
+    $("#hero-coin").textContent = asset + " right now";
     countTo($("#hero-price"), last.p);
-    drawChart(pts, liveFee20);
-    $("#hero-meta").textContent = `BTC on Arbitrum, ${pts.length} price updates, read at ${clock()}.`;
+    drawChart(pts, liveFee20[asset], CHART_DAYS[asset]);
+    $("#hero-meta").textContent = `${asset} on Arbitrum, ${pts.length} price updates, read at ${clock()}.`;
   } catch (x) {
     $("#chart").innerHTML = "";
     $("#chart-fail").hidden = false;
@@ -181,13 +186,16 @@ async function loadFees() {
     const amounts = {};
     for (const a of ["BTC", "ETH"]) amounts[a] = usdToUnits(100, prices[a].price, ASSETS[a].decimals);
     const calls = ROWS.map(([a, d]) => ({ to: ASSETS[a].strategy, data: encodeCalculate(amounts[a], periodSeconds(d)) }));
-    calls.push({ to: ASSETS.BTC.strategy, data: encodeCalculate(usdToUnits(20, b.price, 8), periodSeconds(7)) });
+    calls.push({ to: ASSETS.ETH.strategy, data: encodeCalculate(usdToUnits(20, e.price, 18), periodSeconds(CHART_DAYS.ETH)) });
+    calls.push({ to: ASSETS.BTC.strategy, data: encodeCalculate(usdToUnits(20, b.price, 8), periodSeconds(CHART_DAYS.BTC)) });
     calls.push({ to: ASSETS.BTC.strategy, data: encodeCalculate(usdToUnits(VS_USD, b.price, 8), periodSeconds(7)) });
     const fees = await batch(calls);
     const fVs = fees.pop();
     if (fVs.ok) { try { liveFeeVs = words(fVs.result)[1]; } catch (x) { liveFeeVs = null; } }
-    const f20 = fees.pop();
-    if (f20.ok) { try { liveFee20 = words(f20.result)[1]; } catch (x) { liveFee20 = null; } }
+    for (const a of ["BTC", "ETH"]) {
+      const r = fees.pop();
+      if (r.ok) { try { liveFee20[a] = words(r.result)[1]; } catch (x) { liveFee20[a] = null; } }
+    }
 
     out.innerHTML = "";
     out.classList.remove("skeleton");
@@ -292,4 +300,12 @@ document.querySelectorAll(".reveal").forEach((n) => io.observe(n));
 
 $("#retry").addEventListener("click", loadFees);
 $("#chart-retry").addEventListener("click", loadChart);
+document.querySelectorAll("#coin button").forEach((b) => b.addEventListener("click", () => {
+  if (b.dataset.a === chartAsset) return;
+  chartAsset = b.dataset.a;
+  document.querySelectorAll("#coin button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  $("#hero-price").classList.remove("is-frozen");
+  $("#hero-price").textContent = "reading";
+  loadChart();
+}));
 loadFees().then(loadChart);

@@ -42,10 +42,11 @@
 
     <figure class="stage rise d3" aria-labelledby="stage-cap" style="margin-left:0;margin-right:0">
       <div class="readout" aria-live="polite">
-        <span class="k">BTC right now</span>
+        <span class="k" id="hero-coin">BTC right now</span>
         <span class="v" id="hero-price">reading</span>
       </div>
-      <svg class="chart" id="chart" viewBox="0 0 1000 440" role="img" aria-label="Recent BTC price from Arbitrum, with a line frozen at today's price"></svg>
+      <div class="coin" id="coin" role="group" aria-label="Coin"><button type="button" data-a="BTC" aria-pressed="true">BTC</button><button type="button" data-a="ETH" aria-pressed="false">ETH</button></div>
+      <svg class="chart" id="chart" viewBox="0 0 1000 440" role="img" aria-label="Recent price from Arbitrum, with a line frozen at today's price"></svg>
       <div class="fail" id="chart-fail" hidden role="alert"><p><strong>Couldn't read Arbitrum.</strong> <span id="chart-fail-text"></span> No chart is drawn because we won't guess.</p><button type="button" id="chart-retry">Retry</button></div>
       <figcaption class="stage-meta small" id="stage-cap"><span id="hero-meta">Reading the BTC price feed on Arbitrum...</span><span>Every point is a real price update, read from Arbitrum.</span></figcaption>
     </figure>
