@@ -71,6 +71,25 @@ async function load() {
       : worth6 > 0n
         ? "The price is above the frozen price, so the owner can take " + usd6(worth6) + " in USDC."
         : "The price is not above the frozen price yet, so it pays nothing today. It can still change before the end date.";
+    // Calendar reminder a day before the end (or an hour before, if less than a day is left).
+    const remind = $("#c-remind");
+    remind.hidden = ended;
+    if (!ended) {
+      const at = expiry - (left > 86400 ? 86400 : 3600);
+      const ics = (t) => new Date(t * 1000).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+      const body = [
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Freeze//Card reminder//EN", "BEGIN:VEVENT",
+        "UID:freeze-card-" + id + "@freeze-paybox.vercel.app", "DTSTAMP:" + ics(Math.floor(Date.now() / 1000)),
+        "DTSTART:" + ics(at), "DTEND:" + ics(at + 1800),
+        "SUMMARY:Freeze card #" + id + " ends soon",
+        "DESCRIPTION:Your " + asset + " freeze at " + usd8(strike) + " ends " + new Date(expiry * 1000).toUTCString() + ". If it is worth something\\, ask your agent to use Freeze card " + id + " before then. " + location.href,
+        "URL:" + location.href,
+        "BEGIN:VALARM", "TRIGGER:-PT0M", "ACTION:DISPLAY", "DESCRIPTION:Freeze card #" + id + " ends soon", "END:VALARM",
+        "END:VEVENT", "END:VCALENDAR",
+      ].join("\r\n");
+      remind.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(body);
+      remind.download = "freeze-card-" + id + ".ics";
+    }
     const text = "My " + asset + " is frozen at " + dropCents(usd8(strike)) + ". " + (ended ? "Ended. " : fmtDuration(left) + " left. ") + "Worth " + usd6(worth6) + " right now. I paid " + usd6(fee6) + " to lock it.";
     $("#c-share").href = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text) + "&url=" + encodeURIComponent(location.href);
     show("#state-card");
