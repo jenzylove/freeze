@@ -55,7 +55,8 @@ test("break-even is strike plus fee per coin", () => {
 
 test("allowance adds 5% and rounds up", () => {
   assert.equal(allowanceFor(8088533n), 8492960n);
-  assert.equal(allowanceFor(1n), 2n);
+  assert.equal(allowanceFor(1n), 5_000_000n);
+  assert.equal(allowanceFor(397_627n), 5_000_000n);
 });
 
 test("money and amount formatting", () => {

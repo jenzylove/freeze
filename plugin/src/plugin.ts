@@ -50,10 +50,10 @@ const days = z
   .max(365)
   .optional()
   .describe("How long to keep the price frozen. BTC: 7 to 14 days. ETH: 60 to 90 days. Other values are moved into range.");
-const owner = z
+const sender = z
   .string()
   .regex(/^0x[0-9a-fA-F]{40}$/)
-  .describe("The user's PayBox EVM wallet address on Arbitrum (from list_credentials). The freeze card is sent here.");
+  .describe("The selected PayBox EVM wallet's public address. Fill it in yourself from the wallet you use for this call; never ask the user to type it. Freeze cards are sent to and read from this wallet.");
 
 type Quote = {
   asset: Asset;
@@ -125,7 +125,8 @@ function createServer() {
     {
       title: "Freeze: price to lock today's price",
       description:
-        "Free. Tells the user what it costs to freeze today's BTC or ETH price for a dollar amount, read live from the Hegic options market on Arbitrum. " +
+        "Free. Use this when the user wants to buy BTC or ETH but can't or won't right now: waiting for payday, cash tied up, or scared to miss a rise after a dip. " +
+        "It tells them what it costs to freeze today's BTC or ETH price for a dollar amount, read live from the Hegic options market on Arbitrum. " +
         "A freeze is the right, until the end date, to be paid the difference if the price rises above today's price. " +
         "The most the user can lose is the fee. Use this before freeze_lock and show the user the fee, frozen price, end date and break-even price in plain words.",
       inputSchema: z.object({ asset, usd, days }).strict(),
@@ -151,11 +152,11 @@ function createServer() {
       description:
         "Proposes a one-time USDC.e allowance on Arbitrum so the freeze fee can be paid. freeze_lock returns this same step on its own when the allowance is missing, so calling this directly is optional. " +
         "The allowance covers the quoted fee plus 5% for price moves. Nothing is bought by this step.",
-      inputSchema: z.object({ asset, usd, days, owner }).strict(),
+      inputSchema: z.object({ asset, usd, days, sender }).strict(),
       outputSchema: evmOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ asset: a, usd: dollars, days: d, owner: who }) => {
+    async ({ asset: a, usd: dollars, days: d, sender: who }) => {
       const q = await quote(a, dollars, d);
       const need = allowanceFor(q.fee);
       const [allowHex] = await readMany([{ to: HEGIC.usdce, data: encodeAllowance(who, HEGIC.treasury) }]);
@@ -166,7 +167,7 @@ function createServer() {
         content: [
           {
             type: "text" as const,
-            text: `Allow up to ${usd6(need)} USDC.e (the ${usd6(q.fee)} fee plus 5% for price moves) to be paid to Hegic's options pool on Arbitrum. Approve in PayBox, then call freeze_lock.`,
+            text: `Allow Hegic's options pool on Arbitrum to take freeze fees from this wallet, up to ${usd6(need)} USDC.e in total. This covers today's ${usd6(q.fee)} fee and the next few freezes. Nothing is bought yet. Approve in PayBox, then call freeze_lock.`,
           },
         ],
       };
@@ -179,23 +180,38 @@ function createServer() {
       title: "Freeze: lock today's price",
       description:
         "Proposes buying the freeze on Arbitrum: one transaction that pays the fee in USDC.e and sends a freeze card (an NFT) to the owner. " +
-        "Quote first with freeze_quote and get the user's go-ahead. If the fee allowance is missing, this returns the allowance transaction instead; once the user approves it, call freeze_lock again with the same arguments.",
-      inputSchema: z.object({ asset, usd, days, owner }).strict(),
+        "Quote first with freeze_quote and get the user's go-ahead. This is the only tool needed to freeze: if the wallet first needs USDC.e for the fee or needs to allow the fee, it returns that transaction instead. " +
+        "Each time PayBox confirms one, call freeze_lock again with the same arguments until it returns the freeze itself. Tell the user how many approvals are left.",
+      inputSchema: z.object({ asset, usd, days, sender }).strict(),
       outputSchema: evmOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ asset: a, usd: dollars, days: d, owner: who }) => {
+    async ({ asset: a, usd: dollars, days: d, sender: who }) => {
       const q = await quote(a, dollars, d);
       if (q.capacity < q.collateral) throw new Error("The market can't sell a freeze this size right now. Try a smaller amount.");
       const [balHex, allowHex] = await readMany([
         { to: HEGIC.usdce, data: encodeBalanceOf(who) },
         { to: HEGIC.usdce, data: encodeAllowance(who, HEGIC.treasury) },
       ]);
-      if (first(balHex!) < q.fee)
-        throw new Error(
-          `This wallet needs ${usd6(q.fee)} of USDC.e on Arbitrum for the fee and has ${usd6(first(balHex!))}. Call freeze_fund to swap a little ETH into USDC.e, then freeze_lock again.`,
-        );
-      if (first(allowHex!) < q.fee) {
+      const bal = first(balHex!);
+      const allowed = first(allowHex!) >= q.fee;
+      if (bal < q.fee) {
+        // No USDC.e for the fee yet: swap a little ETH first (at least $1, so a few freezes are covered).
+        const target = q.fee + 100_000n > 1_000_000n ? q.fee + 100_000n : 1_000_000n;
+        const [feedHex] = await readMany([{ to: ASSETS.ETH.feed, data: SEL.latestRoundData }]);
+        const wei = usd6ToWei(target, int256(wordAt(feedHex!, 1)));
+        const minOut = (target * 98n) / 100n;
+        return {
+          ...proposeEvm({ chain: ARBITRUM, to: UNISWAP.router, value: wei.toString(), data: encodeSwapEthToUsdce(who, wei, minOut) }),
+          content: [
+            {
+              type: "text" as const,
+              text: `Step 1 of ${allowed ? 2 : 3}: the fee is paid in USDC.e and this wallet has ${usd6(bal)}. Swap ${units(wei, 18, 8)} ETH (about ${usd6(target)}) for at least ${usd6(minOut)} USDC.e on Uniswap. Nothing is frozen yet. Approve in PayBox; once it confirms, call freeze_lock again with the same arguments.`,
+            },
+          ],
+        };
+      }
+      if (!allowed) {
         // First freeze from this wallet: hand back the allowance step so the agent never dead ends.
         const need = allowanceFor(q.fee);
         return {
@@ -203,7 +219,7 @@ function createServer() {
           content: [
             {
               type: "text" as const,
-              text: `Step 1 of 2: this wallet has not allowed the fee yet. Allow up to ${usd6(need)} USDC.e (the ${usd6(q.fee)} fee plus 5% for price moves) to be paid to Hegic's options pool. Nothing is bought yet. Approve in PayBox, then call freeze_lock again with the same arguments to lock the price.`,
+              text: `Next step: allow Hegic's options pool to take freeze fees from this wallet, up to ${usd6(need)} USDC.e in total. This covers today's ${usd6(q.fee)} fee and the next few freezes, so later ones need one approval. Nothing is bought yet. Approve in PayBox; once it confirms, call freeze_lock again with the same arguments.`,
             },
           ],
         };
@@ -220,7 +236,7 @@ function createServer() {
         content: [
           {
             type: "text" as const,
-            text: `Freeze ${out.asset} at ${out.frozen_price} on ${out.amount} for ${out.days} days, fee ${out.fee}. The freeze card goes to ${who}. Approve in PayBox.`,
+            text: `Last step: freeze ${out.asset} at ${out.frozen_price} on ${out.amount} for ${out.days} days, fee ${out.fee}. The freeze card goes to ${who}. Approve in PayBox; once it confirms, call freeze_cards to show the card.`,
           },
         ],
       };
@@ -248,11 +264,11 @@ function createServer() {
       title: "Freeze: my freeze cards",
       description:
         "Free. Lists the freeze cards an address holds, with the frozen price, today's price, what each is worth right now and when it ends. Read live from Arbitrum.",
-      inputSchema: z.object({ owner }).strict(),
+      inputSchema: z.object({ sender }).strict(),
       outputSchema: z.object({ cards: z.array(cardOutput) }).strict(),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ owner: who }) => {
+    async ({ sender: who }) => {
       const ids = await cardIdsSentTo(HEGIC.cards, who, FREEZE_START_BLOCK);
       const cards = [];
       for (const id of ids.slice(-20)) {
@@ -272,11 +288,11 @@ function createServer() {
       title: "Freeze: use a freeze card",
       description:
         "Proposes cashing a freeze card: if the price is above the frozen price, the market pays the difference in USDC.e to the card's owner. Only the owner can do this. If it's worth nothing right now it says so instead.",
-      inputSchema: z.object({ card: z.string().regex(/^\d{1,12}$/).describe("Freeze card number."), owner }).strict(),
+      inputSchema: z.object({ card: z.string().regex(/^\d{1,12}$/).describe("Freeze card number."), sender }).strict(),
       outputSchema: evmOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ card, owner: who }) => {
+    async ({ card, sender: who }) => {
       const c = await readCard(BigInt(card));
       if (c.owner.toLowerCase() !== who.toLowerCase()) throw new Error(`Card ${card} belongs to ${c.owner}, not ${who}.`);
       if (!c.view.active) throw new Error(`Card ${card} has ended.`);
@@ -298,14 +314,14 @@ function createServer() {
       inputSchema: z
         .object({
           card: z.string().regex(/^\d{1,12}$/).describe("Freeze card number."),
-          owner,
+          sender,
           to: z.string().regex(/^0x[0-9a-fA-F]{40}$/).describe("Address to give the card to."),
         })
         .strict(),
       outputSchema: evmOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ card, owner: who, to }) => {
+    async ({ card, sender: who, to }) => {
       const c = await readCard(BigInt(card));
       if (c.owner.toLowerCase() !== who.toLowerCase()) throw new Error(`Card ${card} belongs to ${c.owner}, not ${who}.`);
       const proposal = proposeEvm({ chain: ARBITRUM, to: HEGIC.cards, value: "0", data: encodeTransfer(who, to, BigInt(card)) });
@@ -321,14 +337,14 @@ function createServer() {
     {
       title: "Freeze: get USDC.e for fees",
       description:
-        "Proposes swapping a little ETH on Arbitrum into USDC.e (what freeze fees are paid in) through Uniswap, with at most 2% slippage. Use when freeze_lock says the wallet lacks USDC.e. One transaction; the ETH is sent as value, no approval needed.",
+        "Proposes swapping a little ETH on Arbitrum into USDC.e (what freeze fees are paid in) through Uniswap, with at most 2% slippage. freeze_lock already does this step on its own when needed, so this is only for topping up. One transaction; the ETH is sent as value, no approval needed.",
       inputSchema: z
-        .object({ usd: z.number().min(0.5).max(100).describe("How many dollars of USDC.e to get."), owner })
+        .object({ usd: z.number().min(0.5).max(100).describe("How many dollars of USDC.e to get."), sender })
         .strict(),
       outputSchema: evmOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ usd: dollars, owner: who }) => {
+    async ({ usd: dollars, sender: who }) => {
       const [feedHex] = await readMany([{ to: ASSETS.ETH.feed, data: SEL.latestRoundData }]);
       const price = int256(wordAt(feedHex!, 1));
       const target = BigInt(Math.round(dollars * 1e6));

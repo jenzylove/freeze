@@ -74,9 +74,13 @@ export function payout6(price1e8: bigint, strike1e8: bigint, units: bigint, deci
   return ((price1e8 - strike1e8) * units * 10n ** USDC_DECIMALS) / (10n ** BigInt(decimals) * 10n ** PRICE_DECIMALS);
 }
 
-/** Allowance to request: fee plus 5% for the price moving between approve and buy, rounded up. */
+/** Smallest allowance asked for: $5, so the first approval also covers the next few freezes (one tap each). */
+export const MIN_ALLOWANCE6 = 5_000_000n;
+
+/** Allowance to request: fee plus 5% for the price moving between approve and buy, rounded up, never under $5. */
 export function allowanceFor(fee6: bigint): bigint {
-  return (fee6 * 105n + 99n) / 100n;
+  const need = (fee6 * 105n + 99n) / 100n;
+  return need > MIN_ALLOWANCE6 ? need : MIN_ALLOWANCE6;
 }
 
 export const periodSeconds = (days: number) => BigInt(days * DAY);
