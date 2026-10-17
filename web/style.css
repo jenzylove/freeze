@@ -277,7 +277,8 @@ footer.foot { border-top: 1px solid var(--line); margin-top: 2rem; padding: clam
 .foot-say em { color: var(--ice); font-style: normal; font-weight: 700; }
 .wordmark { font-family: var(--display); font-weight: 900; font-size: clamp(6rem, 26vw, 22rem); line-height: 0.8; letter-spacing: -0.06em; margin: 3rem 0 0; color: transparent; -webkit-text-stroke: 1px color-mix(in srgb, var(--ice) 55%, transparent); user-select: none; white-space: nowrap; }
 .foot-base { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem 2rem; border-top: 1px solid var(--line); padding-top: 1.25rem; margin-top: 1.5rem; font-size: 0.85rem; }
-.foot-base p { margin: 0; max-width: 46rem; }
+.foot-base a { color: var(--soft); text-decoration: none; }
+.foot-base a:hover { color: var(--ink); }
 
 /* entrance */
 @media (prefers-reduced-motion: no-preference) {
