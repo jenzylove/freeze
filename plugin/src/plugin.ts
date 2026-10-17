@@ -149,7 +149,7 @@ function createServer() {
     {
       title: "Freeze: allow the fee to be paid (first time)",
       description:
-        "Proposes a one-time USDC.e allowance on Arbitrum so the freeze fee can be paid. Only needed when freeze_lock says an approval is missing. " +
+        "Proposes a one-time USDC.e allowance on Arbitrum so the freeze fee can be paid. freeze_lock returns this same step on its own when the allowance is missing, so calling this directly is optional. " +
         "The allowance covers the quoted fee plus 5% for price moves. Nothing is bought by this step.",
       inputSchema: z.object({ asset, usd, days, owner }).strict(),
       outputSchema: evmOutputSchema,
@@ -179,7 +179,7 @@ function createServer() {
       title: "Freeze: lock today's price",
       description:
         "Proposes buying the freeze on Arbitrum: one transaction that pays the fee in USDC.e and sends a freeze card (an NFT) to the owner. " +
-        "Quote first with freeze_quote and get the user's go-ahead. If the allowance is missing it says so; call freeze_approve first.",
+        "Quote first with freeze_quote and get the user's go-ahead. If the fee allowance is missing, this returns the allowance transaction instead; once the user approves it, call freeze_lock again with the same arguments.",
       inputSchema: z.object({ asset, usd, days, owner }).strict(),
       outputSchema: evmOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -192,8 +192,22 @@ function createServer() {
         { to: HEGIC.usdce, data: encodeAllowance(who, HEGIC.treasury) },
       ]);
       if (first(balHex!) < q.fee)
-        throw new Error(`This wallet needs ${usd6(q.fee)} of USDC.e on Arbitrum for the fee and has ${usd6(first(balHex!))}.`);
-      if (first(allowHex!) < q.fee) throw new Error("Approval missing: call freeze_approve first, then freeze_lock.");
+        throw new Error(
+          `This wallet needs ${usd6(q.fee)} of USDC.e on Arbitrum for the fee and has ${usd6(first(balHex!))}. Call freeze_fund to swap a little ETH into USDC.e, then freeze_lock again.`,
+        );
+      if (first(allowHex!) < q.fee) {
+        // First freeze from this wallet: hand back the allowance step so the agent never dead ends.
+        const need = allowanceFor(q.fee);
+        return {
+          ...proposeEvm({ chain: ARBITRUM, to: HEGIC.usdce, value: "0", data: encodeApprove(HEGIC.treasury, need) }),
+          content: [
+            {
+              type: "text" as const,
+              text: `Step 1 of 2: this wallet has not allowed the fee yet. Allow up to ${usd6(need)} USDC.e (the ${usd6(q.fee)} fee plus 5% for price moves) to be paid to Hegic's options pool. Nothing is bought yet. Approve in PayBox, then call freeze_lock again with the same arguments to lock the price.`,
+            },
+          ],
+        };
+      }
       const out = describe(q);
       const proposal = proposeEvm({
         chain: ARBITRUM,

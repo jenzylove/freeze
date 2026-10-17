@@ -29,24 +29,30 @@
     <h2>The market is real</h2>
     <p>Every Freeze is a call option bought from Hegic's pool on Arbitrum. The fees on the home page are read live from that pool, not invented. Each option is an NFT in the buyer's wallet. Anyone can look one up on the <a href="card.html?id=16684">card page</a>, for example card 16684 (ETH) or card 16681 (BTC).</p>
 
+    <h2>A real freeze on Arbitrum mainnet, through PayBox</h2>
+    <span class="tag">Live on mainnet</span>
+    <p>On 17 October 2026 a PayBox user asked their agent in plain words to freeze $20 of BTC for 7 days. The agent called Freeze, and each transaction appeared in the PayBox window for the user to approve. Real money moved.</p>
+    <ol class="runlist">
+      <li><b>1</b>Swapped about $1 of ETH into 0.9995 USDC.e to pay the fee. <a href="https://arbiscan.io/tx/0xe2d3d2ed581ab4b111f578c03959c4ba815b0f3e993eb3c655fa4ec2c60c5957">See it on Arbiscan</a></li>
+      <li><b>2</b>Allowed Hegic's pool to take up to $0.42 for the fee. <a href="https://arbiscan.io/tx/0x61bfba405d7014a5023b059f4558900ddd40f97a95563ef14dd486626b401223">See it on Arbiscan</a></li>
+      <li><b>3</b>Locked it. Paid a $0.40 fee and got card 16685: 0.00024543 BTC frozen at $81,486.80 until 24 October 2026. <a href="https://arbiscan.io/tx/0x6c819fea4aa0059b7514a8f97380193c1b03b1e93b2604367f31b533fe73893f">See it on Arbiscan</a></li>
+    </ol>
+    <p><a href="card.html?id=16685">Open card 16685</a> to see what it is worth right now, read live from the chain.</p>
+
     <h2>The fork run</h2>
     <span class="tag">Simulated on a local fork of Arbitrum mainnet</span>
-    <p>On 17 October 2026 we copied Arbitrum mainnet to a local test chain at block 515,564,054 and ran a full freeze there. No real money moved and nothing below happened on the live chain. The test price rise was faked on the fork to see the payout.</p>
+    <p>Before going live we copied Arbitrum mainnet to a local test chain at block 515,564,054 and ran a full freeze there, so we could fake a price rise and watch the payout. No real money moved in this run.</p>
     <ol class="runlist">
       <li><b>1</b>Asked the pool for a fee: 0.04 ETH for 60 days cost 8.09 USDC.</li>
-      <li><b>2</b>Bought it. The test buyer paid exactly the quote, 8.09 USDC, and got a freeze card (number 16685) in their wallet.</li>
+      <li><b>2</b>Bought it. The test buyer paid exactly the quote and got a freeze card in their wallet.</li>
       <li><b>3</b>The card stored the frozen price: 0.04 ETH at $2,418.67.</li>
       <li><b>4</b>Faked a price of $2,900 on the fork. The card showed a payout of 19.25 USDC, which is ($2,900 minus $2,418.67) times 0.04.</li>
       <li><b>5</b>A stranger could not cash the card. The owner could, and received 19.25 USDC.</li>
     </ol>
-    <p class="small">Card 16685 exists only on that local fork. It is not on Arbitrum mainnet, so the card page will say it is not found.</p>
+    <p class="small">The fork card lived only on that test chain. Its number was later taken on mainnet by the real freeze above.</p>
 
-    <h2>Real mainnet freeze through PayBox</h2>
-    <span class="tag soon">Coming</span>
-    <p>A real freeze, bought on Arbitrum mainnet through PayBox with one approval, is not done yet. When it is, its card and the Arbiscan transaction will be linked here. Until then there is nothing to link, and we are not showing anything pretending to be it.</p>
-
-    <h2>What this does not prove</h2>
-    <p>The fork run proves the pool's rules: the fee, the card, the payout and who can cash it. It does not prove that PayBox can send these transactions on Arbitrum. That is the next step.</p>
+    <h2>What is not proven yet</h2>
+    <p>Card 16685 has not ended or been cashed on mainnet yet. Cashing a card that is worth something was proven on the fork, and on mainnet it waits for BTC to rise above $81,486.80 before 24 October.</p>
   </div>
 </main>
 
