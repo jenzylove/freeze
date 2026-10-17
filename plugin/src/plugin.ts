@@ -125,7 +125,8 @@ function createServer() {
     {
       title: "Freeze: price to lock today's price",
       description:
-        "Free. Use this when the user wants to buy BTC or ETH but can't or won't right now: waiting for payday, cash tied up, or scared to miss a rise after a dip. " +
+        "Free. Use this when the user wants to buy bitcoin (BTC) or ether (ETH) but can't or won't right now: waiting for payday or salary, cash tied up, or scared to miss the rebound after a dip. " +
+        "Also for: buy the dip later, lock a price, price lock, call option, keep the upside without buying. " +
         "It tells them what it costs to freeze today's BTC or ETH price for a dollar amount, read live from the Hegic options market on Arbitrum. " +
         "A freeze is the right, until the end date, to be paid the difference if the price rises above today's price. " +
         "The most the user can lose is the fee. Use this before freeze_lock and show the user the fee, frozen price, end date and break-even price in plain words.",
@@ -151,7 +152,7 @@ function createServer() {
       title: "Freeze: allow the fee to be paid (first time)",
       description:
         "Proposes a one-time USDC.e allowance on Arbitrum so the freeze fee can be paid. freeze_lock returns this same step on its own when the allowance is missing, so calling this directly is optional. " +
-        "The allowance covers the quoted fee plus 5% for price moves. Nothing is bought by this step.",
+        "The allowance is at least $5, so it also covers the next few freezes. Nothing is bought by this step.",
       inputSchema: z.object({ asset, usd, days, sender }).strict(),
       outputSchema: evmOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
