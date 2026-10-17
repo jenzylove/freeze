@@ -69,7 +69,7 @@ async function load() {
     $("#c-note").textContent = ended
       ? "This freeze is over. Any payout had to be taken before it ended."
       : worth6 > 0n
-        ? "The price is above the frozen price, so the owner can take " + usd6(worth6) + " in USDC."
+        ? "The price is above the frozen price, so the owner can take " + usd6(worth6) + " in USDC. Ask your agent to cash it before it ends; after the end date it pays nothing."
         : "The price is not above the frozen price yet, so it pays nothing today. It can still change before the end date.";
     // Calendar reminder a day before the end (or an hour before, if less than a day is left).
     const remind = $("#c-remind");

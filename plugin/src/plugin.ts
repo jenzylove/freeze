@@ -139,7 +139,7 @@ function createServer() {
       const text =
         `${out.fee} freezes ${out.asset} at ${out.frozen_price} on ${out.amount} (about $${dollars}) for ${out.days} days, until ${out.ends_utc}. ` +
         `If ${out.asset} is above ${out.frozen_price} when it's used, the freeze pays the difference in USDC; it pays for itself above ${out.break_even_price}. ` +
-        `Most you can lose: ${out.max_loss}.` +
+        `Most you can lose: ${out.max_loss}. To collect, cash it before ${out.ends_utc}; after the end date it can't be cashed.` +
         (out.available ? "" : " The market can't sell a freeze this size right now; try a smaller amount.") +
         (out.note ? ` ${out.note}` : "");
       return { content: [{ type: "text" as const, text }], structuredContent: out };
@@ -237,7 +237,7 @@ function createServer() {
         content: [
           {
             type: "text" as const,
-            text: `Last step: freeze ${out.asset} at ${out.frozen_price} on ${out.amount} for ${out.days} days, fee ${out.fee}. The freeze card goes to ${who}. Approve in PayBox; once it confirms, call freeze_cards to show the card.`,
+            text: `Last step: freeze ${out.asset} at ${out.frozen_price} on ${out.amount} for ${out.days} days, fee about ${out.fee} (the market sets the exact fee when it goes through). The freeze card goes to ${who}. Approve in PayBox; once it confirms, call freeze_cards to show the card and its link.`,
           },
         ],
       };
@@ -264,7 +264,8 @@ function createServer() {
     {
       title: "Freeze: my freeze cards",
       description:
-        "Free. Lists the freeze cards an address holds, with the frozen price, today's price, what each is worth right now and when it ends. Read live from Arbitrum.",
+        "Free. Lists the freeze cards an address holds, with the frozen price, today's price, what each is worth right now, when it ends and a link to its live card page. Read live from Arbitrum. " +
+        "A card must be cashed with freeze_use before it ends; after the end date it pays nothing, so warn the user about any card that is worth something and ends soon. Always show each card's link.",
       inputSchema: z.object({ sender }).strict(),
       outputSchema: z.object({ cards: z.array(cardOutput) }).strict(),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
@@ -277,7 +278,14 @@ function createServer() {
         if (c && c.owner.toLowerCase() === who.toLowerCase()) cards.push(c.view);
       }
       const text = cards.length
-        ? cards.map((c) => `Card ${c.card}: ${c.amount} frozen at ${c.frozen_price}, now ${c.price_now}, worth ${c.worth_now}, ${c.active ? `ends ${c.ends_utc}` : "ended"}.`).join("\n")
+        ? cards
+            .map(
+              (c) =>
+                `Card ${c.card}: ${c.amount} frozen at ${c.frozen_price}, now ${c.price_now}, worth ${c.worth_now}, ${c.active ? `ends ${c.ends_utc}` : "ended"}.` +
+                (c.active && c.worth_now !== "$0.00" ? " Cash it with freeze_use before it ends or the payout is lost." : "") +
+                ` Live card and reminder: ${c.link}`,
+            )
+            .join("\n")
         : "No freeze cards found for this address.";
       return { content: [{ type: "text" as const, text }], structuredContent: { cards } };
     },
