@@ -42,3 +42,32 @@ export async function readMany(calls: Call[]): Promise<string[]> {
 }
 
 export const first = (hex: string) => wordAt(hex, 0);
+
+/** Token ids transferred to `to` on an ERC-721 since `fromBlock` (Transfer topic, indexed to + tokenId). */
+export async function cardIdsSentTo(contract: string, to: string, fromBlock: number): Promise<bigint[]> {
+  const topic0 = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+  const toTopic = "0x" + to.slice(2).toLowerCase().padStart(64, "0");
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  try {
+    const r = await fetch(RPC, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_getLogs",
+        params: [{ address: contract, fromBlock: "0x" + fromBlock.toString(16), toBlock: "latest", topics: [topic0, null, toTopic] }],
+      }),
+      signal: ctl.signal,
+    });
+    const res = (await r.json()) as { result?: { topics: string[] }[]; error?: { message: string } };
+    if (!res.result) throw new Error(`Arbitrum log read failed: ${res.error?.message ?? "no result"}`);
+    return [...new Set(res.result.map((l) => BigInt(l.topics[3] ?? "0x0")))];
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw new Error("Arbitrum RPC timed out");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}

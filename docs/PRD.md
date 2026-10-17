@@ -16,7 +16,7 @@ Lock today's price. Decide later.
 
 **First ten seconds**, in Claude or ChatGPT with PayBox:
 
-> "BTC is at 81k and I get paid next Friday. Freeze 20 dollars of BTC until then."
+> "BTC dipped. Freeze 20 dollars of BTC for a week."
 >
 > "Done for 40 cents: BTC is frozen at 81,379 until Fri 24 Oct. If BTC is higher when you use it, the freeze pays you the difference. The most you can lose is the 40 cents. Approve in PayBox."
 

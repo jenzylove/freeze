@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
 import { evmOutputSchema, proposeEvm } from "./paybox.js";
-import { first, readMany } from "./chain.js";
+import { cardIdsSentTo, first, readMany } from "./chain.js";
 import {
   ARBITRUM,
   ASSETS,
@@ -17,6 +17,9 @@ import {
   encodeBalanceOf,
   encodeBuy,
   encodeCalculate,
+  encodePayOff,
+  encodeTransfer,
+  encodeUint,
   endDateIso,
   int256,
   periodSeconds,
@@ -207,7 +210,139 @@ function createServer() {
     },
   );
 
+  const cardOutput = z
+    .object({
+      card: z.string(),
+      asset: z.enum(["BTC", "ETH"]),
+      amount: z.string(),
+      frozen_price: z.string(),
+      price_now: z.string(),
+      worth_now: z.string(),
+      fee_paid: z.string(),
+      ends_utc: z.string(),
+      active: z.boolean(),
+      link: z.string(),
+    })
+    .strict();
+
+  server.registerTool(
+    "freeze_cards",
+    {
+      title: "Freeze: my freeze cards",
+      description:
+        "Free. Lists the freeze cards an address holds, with the frozen price, today's price, what each is worth right now and when it ends. Read live from Arbitrum.",
+      inputSchema: z.object({ owner }).strict(),
+      outputSchema: z.object({ cards: z.array(cardOutput) }).strict(),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ owner: who }) => {
+      const ids = await cardIdsSentTo(HEGIC.cards, who, FREEZE_START_BLOCK);
+      const cards = [];
+      for (const id of ids.slice(-20)) {
+        const c = await readCard(id).catch(() => null);
+        if (c && c.owner.toLowerCase() === who.toLowerCase()) cards.push(c.view);
+      }
+      const text = cards.length
+        ? cards.map((c) => `Card ${c.card}: ${c.amount} frozen at ${c.frozen_price}, now ${c.price_now}, worth ${c.worth_now}, ${c.active ? `ends ${c.ends_utc}` : "ended"}.`).join("\n")
+        : "No freeze cards found for this address.";
+      return { content: [{ type: "text" as const, text }], structuredContent: { cards } };
+    },
+  );
+
+  server.registerTool(
+    "freeze_use",
+    {
+      title: "Freeze: use a freeze card",
+      description:
+        "Proposes cashing a freeze card: if the price is above the frozen price, the market pays the difference in USDC.e to the card's owner. Only the owner can do this. If it's worth nothing right now it says so instead.",
+      inputSchema: z.object({ card: z.string().regex(/^\d{1,12}$/).describe("Freeze card number."), owner }).strict(),
+      outputSchema: evmOutputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ card, owner: who }) => {
+      const c = await readCard(BigInt(card));
+      if (c.owner.toLowerCase() !== who.toLowerCase()) throw new Error(`Card ${card} belongs to ${c.owner}, not ${who}.`);
+      if (!c.view.active) throw new Error(`Card ${card} has ended.`);
+      if (c.payout === 0n)
+        throw new Error(`Card ${card} is worth nothing right now: ${c.view.asset} is ${c.view.price_now}, at or below the frozen ${c.view.frozen_price}. Keep it until it ends or the price rises.`);
+      const proposal = proposeEvm({ chain: ARBITRUM, to: HEGIC.treasury, value: "0", data: encodePayOff(BigInt(card), who) });
+      return {
+        ...proposal,
+        content: [{ type: "text" as const, text: `Cash card ${card} for about ${c.view.worth_now} in USDC.e (${c.view.asset} ${c.view.price_now} vs frozen ${c.view.frozen_price}). Approve in PayBox.` }],
+      };
+    },
+  );
+
+  server.registerTool(
+    "freeze_gift",
+    {
+      title: "Freeze: give a freeze card to someone",
+      description: "Proposes sending a freeze card (and everything it's worth) to another address. Only the owner can send it.",
+      inputSchema: z
+        .object({
+          card: z.string().regex(/^\d{1,12}$/).describe("Freeze card number."),
+          owner,
+          to: z.string().regex(/^0x[0-9a-fA-F]{40}$/).describe("Address to give the card to."),
+        })
+        .strict(),
+      outputSchema: evmOutputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ card, owner: who, to }) => {
+      const c = await readCard(BigInt(card));
+      if (c.owner.toLowerCase() !== who.toLowerCase()) throw new Error(`Card ${card} belongs to ${c.owner}, not ${who}.`);
+      const proposal = proposeEvm({ chain: ARBITRUM, to: HEGIC.cards, value: "0", data: encodeTransfer(who, to, BigInt(card)) });
+      return {
+        ...proposal,
+        content: [{ type: "text" as const, text: `Give freeze card ${card} (${c.view.amount} frozen at ${c.view.frozen_price}) to ${to}. Approve in PayBox.` }],
+      };
+    },
+  );
+
   return server;
+}
+
+// Freeze launched after this block; cards bought through Freeze are all later.
+const FREEZE_START_BLOCK = 515_500_000;
+const SITE = process.env.FREEZE_SITE ?? "https://freeze-paybox.vercel.app";
+
+async function readCard(id: bigint) {
+  const [liq, owner] = await readMany([
+    { to: HEGIC.treasury, data: encodeUint(SEL.lockedLiquidity, id) },
+    { to: HEGIC.cards, data: encodeUint(SEL.ownerOf, id) },
+  ]);
+  const strategy = "0x" + wordAt(liq!, 1).toString(16).padStart(40, "0");
+  const asset = (Object.keys(ASSETS) as Asset[]).find((a) => ASSETS[a].strategy.toLowerCase() === strategy.toLowerCase());
+  if (!asset) throw new Error(`Card ${id} is not a Freeze card (not a BTC or ETH call).`);
+  const cfg = ASSETS[asset];
+  const fee = wordAt(liq!, 3);
+  const expiry = Number(wordAt(liq!, 4));
+  const [data, pay, feed] = await readMany([
+    { to: cfg.strategy, data: encodeUint(SEL.strategyData, id) },
+    { to: cfg.strategy, data: encodeUint(SEL.payOffAmount, id) },
+    { to: cfg.feed, data: SEL.latestRoundData },
+  ]);
+  const amount = wordAt(data!, 0);
+  const strike = wordAt(data!, 1);
+  const price = int256(wordAt(feed!, 1));
+  const payout = wordAt(pay!, 0);
+  const holder = "0x" + wordAt(owner!, 0).toString(16).padStart(40, "0");
+  return {
+    owner: holder,
+    payout,
+    view: {
+      card: id.toString(),
+      asset,
+      amount: `${units(amount, cfg.decimals, cfg.decimals === 8 ? 8 : 6)} ${asset}`,
+      frozen_price: usd8(strike),
+      price_now: usd8(price),
+      worth_now: usd6(payout),
+      fee_paid: usd6(fee),
+      ends_utc: new Date(expiry * 1000).toISOString().replace(/\.\d{3}Z$/, "Z"),
+      active: expiry > Math.floor(Date.now() / 1000),
+      link: `${SITE}/card.html?id=${id}`,
+    },
+  };
 }
 
 serveStdio(createServer, { legacy: "reject" });
