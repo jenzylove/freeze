@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
 import { evmOutputSchema, proposeEvm } from "./paybox.js";
-import { cardIdsSentTo, first, readMany } from "./chain.js";
+import { cardIdsSentTo, ethBalance, first, readMany } from "./chain.js";
 import {
   ARBITRUM,
   ASSETS,
@@ -129,7 +129,8 @@ function createServer() {
         "Also for: buy the dip later, lock a price, price lock, call option, keep the upside without buying. " +
         "It tells them what it costs to freeze today's BTC or ETH price for a dollar amount, read live from the Hegic options market on Arbitrum. " +
         "A freeze is the right, until the end date, to be paid the difference if the price rises above today's price. " +
-        "The most the user can lose is the fee. Use this before freeze_lock and show the user the fee, frozen price, end date and break-even price in plain words.",
+        "The most the user can lose is the fee. Use this before freeze_lock and show the user the fee, frozen price, end date and break-even price in plain words. " +
+        "The user needs only a few dollars on Arbitrum, not the full amount; if their money is on Solana or Base, freeze_lock explains how to move about $3 there with PayBox's own cross-chain swap.",
       inputSchema: z.object({ asset, usd, days }).strict(),
       outputSchema: quoteOutput,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -202,6 +203,8 @@ function createServer() {
         const [feedHex] = await readMany([{ to: ASSETS.ETH.feed, data: SEL.latestRoundData }]);
         const wei = usd6ToWei(target, int256(wordAt(feedHex!, 1)));
         const minOut = (target * 98n) / 100n;
+        // Also leave room for network fees on the swap, the allowance and the freeze.
+        if ((await ethBalance(who)) < wei + GAS_RESERVE_WEI) throw new Error(NEEDS_FUNDING(who));
         return {
           ...proposeEvm({ chain: ARBITRUM, to: UNISWAP.router, value: wei.toString(), data: encodeSwapEthToUsdce(who, wei, minOut) }),
           content: [
@@ -374,6 +377,13 @@ function createServer() {
 
   return server;
 }
+
+// About $0.50 of ETH at today's prices: enough for the three Arbitrum transactions of a first freeze.
+const GAS_RESERVE_WEI = 200_000_000_000_000n;
+const NEEDS_FUNDING = (who: string) =>
+  `This wallet (${who}) has too little ETH on Arbitrum to pay the fee and network costs. ` +
+  `If the user's money is elsewhere (USDC on Solana or Base, for example), use PayBox's own request_swap to swap about $3 of it into native ETH on Arbitrum One (dst_chain eip155:42161) with this wallet as the recipient, ` +
+  `wait until get_request shows it settled, then call freeze_lock again with the same arguments. Otherwise ask the user to send a few dollars of ETH on Arbitrum to this wallet.`;
 
 // Freeze launched after this block; cards bought through Freeze are all later.
 const FREEZE_START_BLOCK = 515_500_000;

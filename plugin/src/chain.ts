@@ -71,3 +71,25 @@ export async function cardIdsSentTo(contract: string, to: string, fromBlock: num
     clearTimeout(timer);
   }
 }
+
+/** Native ETH balance in wei. */
+export async function ethBalance(who: string): Promise<bigint> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  try {
+    const r = await fetch(RPC, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [who, "latest"] }),
+      signal: ctl.signal,
+    });
+    const res = (await r.json()) as { result?: string; error?: { message: string } };
+    if (!res.result) throw new Error(`Arbitrum balance read failed: ${res.error?.message ?? "no result"}`);
+    return BigInt(res.result);
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw new Error("Arbitrum RPC timed out");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
