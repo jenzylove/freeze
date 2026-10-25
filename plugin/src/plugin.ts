@@ -122,7 +122,7 @@ const quoteOutput = z
   .strict();
 
 function createServer() {
-  const server = new McpServer({ name: "freeze", version: "0.2.0" }, { supportedProtocolVersions: [PROTOCOL_VERSION] });
+  const server = new McpServer({ name: "freeze", version: "0.2.1" }, { supportedProtocolVersions: [PROTOCOL_VERSION] });
 
   server.registerTool(
     "freeze_quote",
@@ -189,7 +189,7 @@ function createServer() {
       description:
         "Proposes buying the freeze on Arbitrum: one transaction that pays the fee in USDC.e and sends a freeze card (an NFT) to the owner. " +
         "Quote first with freeze_quote and get the user's go-ahead. This is the only tool needed to freeze: if the wallet first needs to allow the fee or turn on auto cash, it returns that transaction instead, " +
-        "and if the wallet has no money on Arbitrum it says how to pay from Solana or Base. " +
+        "and if the wallet has no money on Arbitrum it says how to pay from Solana or Base. If the user says where to pay from (\"with my Solana USDC\", \"from Base\"), pass pay_from so their choice is used. " +
         "Each time PayBox confirms one, call freeze_lock again with the same arguments until it returns the freeze itself. Tell the user which step they are on.",
       inputSchema: z
         .object({
@@ -197,6 +197,12 @@ function createServer() {
           usd,
           days,
           sender,
+          pay_from: z
+            .enum(["solana", "base", "arbitrum"])
+            .optional()
+            .describe(
+              "Where the user wants the fee paid from, if they said so: \"my funds on Solana\" or \"my Solana USDC\" is solana, USDC on Base is base, ETH on Arbitrum is arbitrum. Leave it out if they didn't say.",
+            ),
           auto_cash: z
             .boolean()
             .optional()
@@ -206,7 +212,7 @@ function createServer() {
       outputSchema: evmOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ asset: a, usd: dollars, days: d, sender: who, auto_cash }) => {
+    async ({ asset: a, usd: dollars, days: d, sender: who, pay_from, auto_cash }) => {
       const q = await quote(a, dollars, d);
       if (q.capacity < q.collateral) throw new Error("The market can't sell a freeze this size right now. Try a smaller amount.");
       const [[balHex, allowHex, autoHex, feedHex], eth] = await Promise.all([
@@ -230,7 +236,8 @@ function createServer() {
         // Enough ETH already on Arbitrum: swap a little for the fee right here (at least $1, so a few freezes are covered).
         const target = q.fee + 100_000n > 1_000_000n ? q.fee + 100_000n : 1_000_000n;
         const wei = usd6ToWei(target, int256(wordAt(feedHex!, 1)));
-        if (needFee && eth >= wei + GAS_RESERVE_WEI) {
+        // Swap Arbitrum ETH only when the user didn't ask to pay from Solana or Base.
+        if (needFee && (pay_from === undefined || pay_from === "arbitrum") && eth >= wei + GAS_RESERVE_WEI) {
           const minOut = (target * 98n) / 100n;
           return {
             ...proposeEvm({ chain: ARBITRUM, to: UNISWAP.router, value: wei.toString(), data: encodeSwapEthToUsdce(who, wei, minOut) }),
@@ -242,7 +249,7 @@ function createServer() {
             ],
           };
         }
-        throw new Error(NEEDS_FUNDING(who, fundTarget(q.fee, bal), needFee, needGas));
+        throw new Error(NEEDS_FUNDING(who, fundTarget(q.fee, bal), needFee, needGas, pay_from));
       }
       if (needAllow) {
         // First freeze from this wallet: hand back the allowance step so the agent never dead ends.
@@ -525,9 +532,16 @@ function fundTarget(fee: bigint, have: bigint): bigint {
   return ((target + 9_999n) / 10_000n) * 10_000n; // whole cents
 }
 
-const NEEDS_FUNDING = (who: string, target: bigint, fee: boolean, gas: boolean) => {
+const NEEDS_FUNDING = (who: string, target: bigint, fee: boolean, gas: boolean, from?: "solana" | "base" | "arbitrum") => {
   const dollars = Number(target) / 1e6;
   const what = fee && gas ? `about ${usd6(target)} for freeze fees plus a little ETH for network fees` : fee ? `about ${usd6(target)} for freeze fees` : "a little ETH for network fees";
+  const again = "Once it lands (usually under a minute), call freeze_lock again with the same arguments.";
+  if (from === "solana")
+    return `The user chose to pay from Solana. Next: call freeze_fund_solana with usd ${dollars}, sender ${who} and solana_sender set to their PayBox Solana address, to bring ${what} to Arbitrum in one approval. Nothing has been bought yet. ${again}`;
+  if (from === "base")
+    return `The user chose to pay from Base. Next: call freeze_fund with from "base", usd ${dollars} and sender ${who}, to bring ${what} to Arbitrum. Nothing has been bought yet. ${again}`;
+  if (from === "arbitrum")
+    return `This Arbitrum wallet (${who}) doesn't have enough ETH for ${what}. Ask the user to send a few dollars of ETH on Arbitrum to it, or to pay from Solana or Base instead. Nothing has been bought.`;
   return (
     `This Arbitrum wallet (${who}) needs ${what} before it can freeze. Nothing has been bought. ` +
     `Ask the user where to pay from, then call one of these and, once it lands (under a minute), call freeze_lock again with the same arguments: ` +
