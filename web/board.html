@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Every freeze</title>
+<meta name="description" content="Every freeze bought through Freeze and how it ended, losses included. Read from Arbitrum.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+<link rel="icon" type="image/png" sizes="180x180" href="favicon.png?v=2">
+<link rel="apple-touch-icon" href="favicon.png?v=2">
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700,900&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="wrap top">
+  <a class="brand" href="index.html" aria-label="Freeze home"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="#08161f"/><path d="M10 40 L16 33 L21 37 L27 26 L32 31" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 31 H54" stroke="#7ee8ff" stroke-width="3.6" stroke-linecap="round"/><circle cx="32" cy="31" r="4.6" fill="#7ee8ff"/></svg>freeze</a>
+  <nav class="nav" aria-label="Main">
+    <a class="hide-sm" href="index.html#use">How it works</a>
+    <a class="hide-sm" href="index.html#lookup">Find a card</a>
+    <a href="board.html" aria-current="page">Every freeze</a>
+    <a class="hide-sm" href="proof.html">Proof</a>
+    <a class="pill" href="index.html#start">Get started</a>
+  </nav>
+</header>
+
+<style>
+.board { padding-top: clamp(2rem, 6vw, 4rem); padding-bottom: 5rem; }
+.board h1 em { display: inline; }
+.stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem 2rem; margin: clamp(2rem, 5vw, 3rem) 0; padding: 1.5rem 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); }
+@media (min-width: 760px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+.stat b { display: block; font-family: var(--display); font-weight: 330; font-size: clamp(2.2rem, 5vw, 3.4rem); letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat span { display: block; margin-top: 0.5rem; font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--soft); }
+.rows { list-style: none; margin: 0; padding: 0; }
+.row { display: grid; grid-template-columns: 1fr; gap: 0.35rem; padding: 1.1rem 0; border-bottom: 1px solid var(--line); }
+@media (min-width: 860px) { .row { grid-template-columns: 6.5rem 1.4fr 1fr 1fr 1.6fr; gap: 1.25rem; align-items: baseline; } }
+.row.head { display: none; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); padding: 0 0 0.6rem; }
+@media (min-width: 860px) { .row.head { display: grid; } }
+.cardno { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 0.95rem; }
+.what { font-size: 1.1rem; font-weight: 500; letter-spacing: -0.01em; }
+.what small { display: block; font-size: 0.85rem; font-weight: 400; color: var(--soft); }
+.cell { font-family: var(--mono); font-size: 0.88rem; font-variant-numeric: tabular-nums; color: var(--soft); }
+.cell .k { display: inline-block; min-width: 5.5rem; color: var(--faint); }
+@media (min-width: 860px) { .cell .k { display: none; } }
+.out { font-size: 1rem; }
+.out b { font-weight: 700; }
+.out.win b { color: var(--good); }
+.out.lost { color: var(--soft); }
+.chip { display: inline-block; margin-left: 0.5rem; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.15rem 0.45rem; border-radius: 4px; color: var(--ice); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ice) 50%, transparent); vertical-align: 2px; }
+.updated { margin-top: 1.25rem; }
+.empty { padding: 2rem 0; color: var(--soft); }
+</style>
+
+<main class="wrap board">
+  <div class="prose">
+    <p class="eyebrow">Every freeze</p>
+    <h1>Every freeze, <em>and how it ended.</em></h1>
+    <p class="lede" style="margin-top:1.5rem">Each freeze bought through Freeze, read from Arbitrum. Wins, losses and the ones still running. Nothing is left out.</p>
+  </div>
+
+  <div class="stats" aria-live="polite">
+    <div class="stat"><b id="s-freezes">0</b><span>Freezes</span></div>
+    <div class="stat"><b id="s-people">0</b><span>People</span></div>
+    <div class="stat"><b id="s-paid">$0</b><span>Paid out</span></div>
+    <div class="stat"><b id="s-auto">0</b><span>With auto cash</span></div>
+  </div>
+
+  <ul class="rows" id="rows">
+    <li class="row head" aria-hidden="true"><span>Card</span><span>Freeze</span><span>Frozen at</span><span>Ends</span><span>How it went</span></li>
+    <li class="empty" id="state">Reading every freeze...</li>
+  </ul>
+  <p class="small updated" id="updated"></p>
+</main>
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div><p class="foot-say">Lock today's price. <em>Decide later.</em></p><p class="small">A plugin for PayBox by MoonPay.</p></div>
+      <div><h4>Freeze</h4><ul><li><a href="index.html#use">How it works</a></li><li><a href="index.html#versus">Freeze vs buying</a></li><li><a href="index.html#fees-section">Today's fees</a></li></ul></div>
+      <div><h4>Cards</h4><ul><li><a href="index.html#lookup">Find a card</a></li><li><a href="board.html">Every freeze</a></li><li><a href="proof.html">Real freezes</a></li></ul></div>
+      <div><h4>Start</h4><ul><li><a href="index.html#start">Set up in 3 steps</a></li><li><a href="https://app.paybox.sh" target="_blank" rel="noopener">Open PayBox</a></li><li><a href="https://github.com/jenzylove/freeze" target="_blank" rel="noopener">Source code</a></li></ul></div>
+    </div>
+    <p class="wordmark" aria-hidden="true">freeze</p>
+    <div class="foot-base"><span>© 2026 Freeze</span><a href="https://github.com/jenzylove/freeze" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" style="vertical-align:-3px;margin-right:6px"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Source on GitHub</a></div>
+  </div>
+</footer>
+<script type="module" src="js/board.js"></script>
+</body>
+</html>

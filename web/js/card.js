@@ -1,4 +1,4 @@
-import { ASSETS, HEGIC, SEL, batch, word, words, priceCall, parsePrice, unitsToUsd6, breakEven1e8, payout6, usd6, usd8, units, shortAddr, arbiscan, clock, freezeText } from "./chain.js";
+import { ASSETS, HEGIC, AUTOCASH, SEL, batch, word, words, priceCall, parsePrice, unitsToUsd6, breakEven1e8, payout6, usd6, usd8, units, shortAddr, arbiscan, clock, freezeText } from "./chain.js";
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -34,10 +34,14 @@ async function load() {
     for (const a of ["BTC", "ETH"]) if (ASSETS[a].strategy.toLowerCase() === strategy) asset = a;
     if (!asset) { show("#state-notfreeze"); return; }
     const now = parsePrice(asset === "BTC" ? pb : pe);
-    const [sd, po] = await batch([
+    const ownerAddr = "0x" + words(own.result)[0].toString(16).padStart(40, "0");
+    const [sd, po, ac] = await batch([
       { to: strategy, data: SEL.strategyData + word(id) },
       { to: strategy, data: SEL.payOffAmount + word(id) },
+      { to: HEGIC.cards, data: SEL.isApprovedForAll + ownerAddr.slice(2).toLowerCase().padStart(64, "0") + AUTOCASH.slice(2).toLowerCase().padStart(64, "0") },
     ]);
+    const autoCash = ac.ok && words(ac.result)[0] !== 0n;
+    const cashed = lw[0] === 0n; // Hegic unlocks a card once it is cashed
     if (!sd.ok) throw new Error("Could not read the frozen price from Arbitrum.");
     const [amount, strike] = words(sd.result);
     const fee6 = lw[3];
@@ -45,9 +49,9 @@ async function load() {
     const owner = "0x" + words(own.result)[0].toString(16).padStart(40, "0");
     const dec = ASSETS[asset].decimals;
     // Prefer the contract's own number; fall back to the same math if the call reverts.
-    const worth6 = po.ok ? words(po.result)[0] : payout6(now.price, strike, amount, dec);
+    const worth6 = cashed ? 0n : po.ok ? words(po.result)[0] : payout6(now.price, strike, amount, dec);
     const left = expiry - Math.floor(Date.now() / 1000);
-    const ended = left <= 0;
+    const ended = left <= 0 || cashed;
 
     $("#c-asset").textContent = asset;
     $("#c-id").textContent = "Freeze card #" + id;
@@ -64,13 +68,18 @@ async function load() {
     ol.href = arbiscan("address", owner);
     $("#c-scan").href = arbiscan("token", HEGIC.cards + "?a=" + id);
     $("#card").classList.toggle("is-ended", ended);
-    $("#c-state").textContent = ended ? "Ended" : (worth6 > 0n ? "Paying now" : "Waiting");
+    $("#c-state").textContent = cashed ? "Cashed" : ended ? "Ended" : (worth6 > 0n ? "Paying now" : "Waiting");
     $("#c-read").textContent = "Read live from Arbitrum at " + clock() + ".";
-    $("#c-note").textContent = ended
-      ? "This freeze is over. Any payout had to be taken before it ended."
-      : worth6 > 0n
-        ? "The price is above the frozen price, so the owner can take " + usd6(worth6) + " in USDC. Ask your agent to cash it before it ends; after the end date it pays nothing."
-        : "The price is not above the frozen price yet, so it pays nothing today. It can still change before the end date.";
+    const autoLine = autoCash
+      ? " Auto cash is on: if it is still worth something in its last 6 hours, it is paid to the owner automatically."
+      : " Auto cash is off, so the owner has to cash it before the end date.";
+    $("#c-note").textContent = cashed
+      ? "This freeze has been cashed. The payout went to its owner."
+      : ended
+        ? "This freeze is over."
+        : worth6 > 0n
+          ? "The price is above the frozen price, so the owner can take " + usd6(worth6) + " in USDC any time before it ends." + autoLine
+          : "The price is not above the frozen price yet, so it pays nothing today. It can still change before the end date." + autoLine;
     // Calendar reminder a day before the end (or an hour before, if less than a day is left).
     const remind = $("#c-remind");
     remind.hidden = ended;

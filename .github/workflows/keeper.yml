@@ -1,0 +1,39 @@
+name: keeper
+
+# Every 30 minutes: cash winning freeze cards in their last 6 hours (auto cash) and refresh the public board.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: keeper
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+        working-directory: keeper
+      - run: node keeper.mjs
+        working-directory: keeper
+        env:
+          KEEPER_KEY: ${{ secrets.KEEPER_KEY }}
+      - name: Publish board
+        run: |
+          git config user.name "freeze-keeper"
+          git config user.email "freeze-keeper@users.noreply.github.com"
+          git add web/board.json
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -m "Board: update"
+          git pull --rebase --autostash
+          git push

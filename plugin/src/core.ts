@@ -9,6 +9,9 @@ export const HEGIC = {
   usdce: "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8", // settlement token, 6 decimals
 } as const;
 
+/** FreezeAutoCash: cashes a winning card in its last 6 hours, always to the card's owner. */
+export const AUTOCASH = "0x679399608d973c2476d1D9ECd8eB1150e97936Ec";
+
 export type Asset = "BTC" | "ETH";
 
 export const ASSETS: Record<
@@ -134,6 +137,8 @@ export const SEL = {
   ownerOf: "0x6352211e",
   safeTransferFrom: "0x42842e0e", // safeTransferFrom(address,address,uint256)
   lockedLiquidity: "0x3755269b",
+  setApprovalForAll: "0xa22cb465",
+  isApprovedForAll: "0xe985e9c5",
 } as const;
 
 export function encodeCalculate(amount: bigint, period: bigint): string {
@@ -162,6 +167,14 @@ export function encodePayOff(card: bigint, to: string): string {
 
 export function encodeTransfer(from: string, to: string, card: bigint): string {
   return SEL.safeTransferFrom + addr(from) + addr(to) + word(card);
+}
+
+export function encodeSetApprovalForAll(operator: string, on: boolean): string {
+  return SEL.setApprovalForAll + addr(operator) + word(on ? 1n : 0n);
+}
+
+export function encodeIsApprovedForAll(owner: string, operator: string): string {
+  return SEL.isApprovedForAll + addr(owner) + addr(operator);
 }
 
 export function encodeUint(sel: string, v: bigint): string {

@@ -4,6 +4,8 @@ export const HEGIC = {
   treasury: "0xec096ea6eB9aa5ea689b0CF00882366E92377371",
   cards: "0x5Fe380D68fEe022d8acd42dc4D36FbfB249a76d5",
 };
+// Cashes a winning card in its last 6 hours, always to the card's owner.
+export const AUTOCASH = "0x679399608d973c2476d1D9ECd8eB1150e97936Ec";
 export const ASSETS = {
   BTC: { strategy: "0x527d1086C3DD22FcdB338F69D47A1e4bFE11E539", feed: "0x6ce185860a4963106506C203335A2910413708e9", decimals: 8, minDays: 7, maxDays: 14 },
   ETH: { strategy: "0x2727B807D22fCAeB7F900F49894054Ed92b9125B", feed: "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612", decimals: 18, minDays: 60, maxDays: 90 },
@@ -15,6 +17,7 @@ export const SEL = {
   strategyData: "0xd6c8d1b4",
   ownerOf: "0x6352211e",
   lockedLiquidity: "0x3755269b",
+  isApprovedForAll: "0xe985e9c5",
 };
 const PRICE_DECIMALS = 8n;
 const USDC_DECIMALS = 6n;

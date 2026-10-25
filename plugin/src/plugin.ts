@@ -1,11 +1,15 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
-import { evmOutputSchema, proposeEvm } from "./paybox.js";
+import { evmOutputSchema, proposeEvm, proposeSolana, solanaOutputSchema } from "./paybox.js";
 import { cardIdsSentTo, ethBalance, first, readMany } from "./chain.js";
+import * as relay from "./relay.js";
 import {
   ARBITRUM,
   ASSETS,
+  AUTOCASH,
+  encodeIsApprovedForAll,
+  encodeSetApprovalForAll,
   HEGIC,
   MAX_USD,
   MIN_USD,
@@ -118,7 +122,7 @@ const quoteOutput = z
   .strict();
 
 function createServer() {
-  const server = new McpServer({ name: "freeze", version: "0.1.0" }, { supportedProtocolVersions: [PROTOCOL_VERSION] });
+  const server = new McpServer({ name: "freeze", version: "0.2.0" }, { supportedProtocolVersions: [PROTOCOL_VERSION] });
 
   server.registerTool(
     "freeze_quote",
@@ -130,7 +134,8 @@ function createServer() {
         "It tells them what it costs to freeze today's BTC or ETH price for a dollar amount, read live from the Hegic options market on Arbitrum. " +
         "A freeze is the right, until the end date, to be paid the difference if the price rises above today's price. " +
         "The most the user can lose is the fee. Use this before freeze_lock and show the user the fee, frozen price, end date and break-even price in plain words. " +
-        "The user needs only a few dollars on Arbitrum, not the full amount; if their money is on Solana or Base, freeze_lock explains how to move about $3 there with PayBox's own cross-chain swap.",
+        "The user needs only a few dollars for the fee, not the full amount, and can pay it from USDC on Solana, USDC on Base, or ETH on Arbitrum. " +
+        "Every freeze comes with auto cash: if it is worth something in its last hours, it is cashed to the user automatically, so a forgotten win still pays.",
       inputSchema: z.object({ asset, usd, days }).strict(),
       outputSchema: quoteOutput,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -140,7 +145,8 @@ function createServer() {
       const text =
         `${out.fee} freezes ${out.asset} at ${out.frozen_price} on ${out.amount} (about $${dollars}) for ${out.days} days, until ${out.ends_utc}. ` +
         `If ${out.asset} is above ${out.frozen_price} when it's used, the freeze pays the difference in USDC; it pays for itself above ${out.break_even_price}. ` +
-        `Most you can lose: ${out.max_loss}. To collect, cash it before ${out.ends_utc}; after the end date it can't be cashed.` +
+        `Most you can lose: ${out.max_loss}. You can cash it any time before ${out.ends_utc}; if it is still worth something in its last 6 hours, auto cash pays it to you. ` +
+        `The fee can be paid from USDC on Solana, USDC on Base, or ETH on Arbitrum.` +
         (out.available ? "" : " The market can't sell a freeze this size right now; try a smaller amount.") +
         (out.note ? ` ${out.note}` : "");
       return { content: [{ type: "text" as const, text }], structuredContent: out };
@@ -182,40 +188,63 @@ function createServer() {
       title: "Freeze: lock today's price",
       description:
         "Proposes buying the freeze on Arbitrum: one transaction that pays the fee in USDC.e and sends a freeze card (an NFT) to the owner. " +
-        "Quote first with freeze_quote and get the user's go-ahead. This is the only tool needed to freeze: if the wallet first needs USDC.e for the fee or needs to allow the fee, it returns that transaction instead. " +
-        "Each time PayBox confirms one, call freeze_lock again with the same arguments until it returns the freeze itself. Tell the user how many approvals are left.",
-      inputSchema: z.object({ asset, usd, days, sender }).strict(),
+        "Quote first with freeze_quote and get the user's go-ahead. This is the only tool needed to freeze: if the wallet first needs to allow the fee or turn on auto cash, it returns that transaction instead, " +
+        "and if the wallet has no money on Arbitrum it says how to pay from Solana or Base. " +
+        "Each time PayBox confirms one, call freeze_lock again with the same arguments until it returns the freeze itself. Tell the user which step they are on.",
+      inputSchema: z
+        .object({
+          asset,
+          usd,
+          days,
+          sender,
+          auto_cash: z
+            .boolean()
+            .optional()
+            .describe("Default true. Auto cash pays a winning card to its owner in its last 6 hours. Set false only if the user asks to turn it off."),
+        })
+        .strict(),
       outputSchema: evmOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ asset: a, usd: dollars, days: d, sender: who }) => {
+    async ({ asset: a, usd: dollars, days: d, sender: who, auto_cash }) => {
       const q = await quote(a, dollars, d);
       if (q.capacity < q.collateral) throw new Error("The market can't sell a freeze this size right now. Try a smaller amount.");
-      const [balHex, allowHex] = await readMany([
-        { to: HEGIC.usdce, data: encodeBalanceOf(who) },
-        { to: HEGIC.usdce, data: encodeAllowance(who, HEGIC.treasury) },
+      const [[balHex, allowHex, autoHex, feedHex], eth] = await Promise.all([
+        readMany([
+          { to: HEGIC.usdce, data: encodeBalanceOf(who) },
+          { to: HEGIC.usdce, data: encodeAllowance(who, HEGIC.treasury) },
+          { to: HEGIC.cards, data: encodeIsApprovedForAll(who, AUTOCASH) },
+          { to: ASSETS.ETH.feed, data: SEL.latestRoundData },
+        ]),
+        ethBalance(who),
       ]);
       const bal = first(balHex!);
-      const allowed = first(allowHex!) >= q.fee;
-      if (bal < q.fee) {
-        // No USDC.e for the fee yet: swap a little ETH first (at least $1, so a few freezes are covered).
+      const needFee = bal < q.fee;
+      const needGas = eth < MIN_GAS_WEI;
+      const needAllow = first(allowHex!) < q.fee;
+      const needAuto = auto_cash !== false && first(autoHex!) === 0n;
+      const total = (needFee || needGas ? 1 : 0) + (needAllow ? 1 : 0) + (needAuto ? 1 : 0) + 1;
+      const step = () => (total === 1 ? "Last step" : `Next step (${total} approvals to go, counting the freeze)`);
+
+      if (needFee || needGas) {
+        // Enough ETH already on Arbitrum: swap a little for the fee right here (at least $1, so a few freezes are covered).
         const target = q.fee + 100_000n > 1_000_000n ? q.fee + 100_000n : 1_000_000n;
-        const [feedHex] = await readMany([{ to: ASSETS.ETH.feed, data: SEL.latestRoundData }]);
         const wei = usd6ToWei(target, int256(wordAt(feedHex!, 1)));
-        const minOut = (target * 98n) / 100n;
-        // Also leave room for network fees on the swap, the allowance and the freeze.
-        if ((await ethBalance(who)) < wei + GAS_RESERVE_WEI) throw new Error(NEEDS_FUNDING(who));
-        return {
-          ...proposeEvm({ chain: ARBITRUM, to: UNISWAP.router, value: wei.toString(), data: encodeSwapEthToUsdce(who, wei, minOut) }),
-          content: [
-            {
-              type: "text" as const,
-              text: `Step 1 of ${allowed ? 2 : 3}: the fee is paid in USDC.e and this wallet has ${usd6(bal)}. Swap ${units(wei, 18, 8)} ETH (about ${usd6(target)}) for at least ${usd6(minOut)} USDC.e on Uniswap. Nothing is frozen yet. Approve in PayBox; once it confirms, call freeze_lock again with the same arguments.`,
-            },
-          ],
-        };
+        if (needFee && eth >= wei + GAS_RESERVE_WEI) {
+          const minOut = (target * 98n) / 100n;
+          return {
+            ...proposeEvm({ chain: ARBITRUM, to: UNISWAP.router, value: wei.toString(), data: encodeSwapEthToUsdce(who, wei, minOut) }),
+            content: [
+              {
+                type: "text" as const,
+                text: `${step()}: the fee is paid in USDC.e and this wallet has ${usd6(bal)}. Swap ${units(wei, 18, 8)} ETH (about ${usd6(target)}) for at least ${usd6(minOut)} USDC.e on Uniswap. Nothing is frozen yet. Approve in PayBox; once it confirms, call freeze_lock again with the same arguments.`,
+              },
+            ],
+          };
+        }
+        throw new Error(NEEDS_FUNDING(who, fundTarget(q.fee, bal), needFee, needGas));
       }
-      if (!allowed) {
+      if (needAllow) {
         // First freeze from this wallet: hand back the allowance step so the agent never dead ends.
         const need = allowanceFor(q.fee);
         return {
@@ -223,7 +252,18 @@ function createServer() {
           content: [
             {
               type: "text" as const,
-              text: `Next step: allow Hegic's options pool to take freeze fees from this wallet, up to ${usd6(need)} USDC.e in total. This covers today's ${usd6(q.fee)} fee and the next few freezes, so later ones need one approval. Nothing is bought yet. Approve in PayBox; once it confirms, call freeze_lock again with the same arguments.`,
+              text: `${step()}: allow Hegic's options pool to take freeze fees from this wallet, up to ${usd6(need)} USDC.e in total. This covers today's ${usd6(q.fee)} fee and the next few freezes. Nothing is bought yet. Approve in PayBox; once it confirms, call freeze_lock again with the same arguments.`,
+            },
+          ],
+        };
+      }
+      if (needAuto) {
+        return {
+          ...proposeEvm({ chain: ARBITRUM, to: HEGIC.cards, value: "0", data: encodeSetApprovalForAll(AUTOCASH, true) }),
+          content: [
+            {
+              type: "text" as const,
+              text: `${step()}: turn on auto cash, once for this wallet. If a freeze card is worth something in its last 6 hours, Freeze's auto cash contract (${AUTOCASH}) cashes it and the money goes to the card's owner, never anywhere else. It has no other powers, no admin and holds no money. Approve in PayBox; once it confirms, call freeze_lock again with the same arguments.`,
             },
           ],
         };
@@ -258,6 +298,7 @@ function createServer() {
       fee_paid: z.string(),
       ends_utc: z.string(),
       active: z.boolean(),
+      status: z.enum(["open", "cashed", "ended"]),
       link: z.string(),
     })
     .strict();
@@ -268,13 +309,18 @@ function createServer() {
       title: "Freeze: my freeze cards",
       description:
         "Free. Lists the freeze cards an address holds, with the frozen price, today's price, what each is worth right now, when it ends and a link to its live card page. Read live from Arbitrum. " +
-        "A card must be cashed with freeze_use before it ends; after the end date it pays nothing, so warn the user about any card that is worth something and ends soon. Always show each card's link.",
+        "A card can be cashed with freeze_use any time before it ends; after the end date it pays nothing. With auto cash on, a card that is worth something is cashed to its owner in its last 6 hours. " +
+        "If auto cash is off, warn the user about any card that is worth something and ends soon. Always show each card's link.",
       inputSchema: z.object({ sender }).strict(),
-      outputSchema: z.object({ cards: z.array(cardOutput) }).strict(),
+      outputSchema: z.object({ cards: z.array(cardOutput), auto_cash: z.boolean() }).strict(),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async ({ sender: who }) => {
-      const ids = await cardIdsSentTo(HEGIC.cards, who, FREEZE_START_BLOCK);
+      const [ids, [autoHex]] = await Promise.all([
+        cardIdsSentTo(HEGIC.cards, who, FREEZE_START_BLOCK),
+        readMany([{ to: HEGIC.cards, data: encodeIsApprovedForAll(who, AUTOCASH) }]),
+      ]);
+      const auto = first(autoHex!) !== 0n;
       const cards = [];
       for (const id of ids.slice(-20)) {
         const c = await readCard(id).catch(() => null);
@@ -284,13 +330,18 @@ function createServer() {
         ? cards
             .map(
               (c) =>
-                `Card ${c.card}: ${c.amount} frozen at ${c.frozen_price}, now ${c.price_now}, worth ${c.worth_now}, ${c.active ? `ends ${c.ends_utc}` : "ended"}.` +
-                (c.active && c.worth_now !== "$0.00" ? " Cash it with freeze_use before it ends or the payout is lost." : "") +
-                ` Live card and reminder: ${c.link}`,
+                `Card ${c.card}: ${c.amount} frozen at ${c.frozen_price}, now ${c.price_now}, ` +
+                (c.status === "cashed" ? "already cashed." : c.status === "ended" ? "ended." : `worth ${c.worth_now}, ends ${c.ends_utc}.`) +
+                (c.active && c.worth_now !== "$0.00"
+                  ? auto
+                    ? " Auto cash will pay it in its last 6 hours if it is still worth something; cash it now with freeze_use to lock in today's value."
+                    : " Auto cash is off: cash it with freeze_use before it ends or the payout is lost."
+                  : "") +
+                ` Live card: ${c.link}`,
             )
-            .join("\n")
+            .join("\n") + `\nAuto cash is ${auto ? "on" : "off (turn it on with freeze_auto_cash)"} for this wallet.`
         : "No freeze cards found for this address.";
-      return { content: [{ type: "text" as const, text }], structuredContent: { cards } };
+      return { content: [{ type: "text" as const, text }], structuredContent: { cards, auto_cash: auto } };
     },
   );
 
@@ -307,6 +358,7 @@ function createServer() {
     async ({ card, sender: who }) => {
       const c = await readCard(BigInt(card));
       if (c.owner.toLowerCase() !== who.toLowerCase()) throw new Error(`Card ${card} belongs to ${c.owner}, not ${who}.`);
+      if (c.view.status === "cashed") throw new Error(`Card ${card} has already been cashed.`);
       if (!c.view.active) throw new Error(`Card ${card} has ended.`);
       if (c.payout === 0n)
         throw new Error(`Card ${card} is worth nothing right now: ${c.view.asset} is ${c.view.price_now}, at or below the frozen ${c.view.frozen_price}. Keep it until it ends or the price rises.`);
@@ -344,31 +396,112 @@ function createServer() {
     },
   );
 
+  const solanaSender = z
+    .string()
+    .regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
+    .describe("The user's PayBox Solana wallet public address, which pays the USDC. Fill it in yourself from the selected Solana wallet; never ask the user to type it.");
+  const fundUsd = z
+    .number()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe("Dollars of USDC.e to land on Arbitrum for freeze fees. Use the amount freeze_lock named; default 3.");
+
   server.registerTool(
     "freeze_fund",
     {
-      title: "Freeze: get USDC.e for fees",
+      title: "Freeze: pay the fee from Base or Arbitrum",
       description:
-        "Proposes swapping a little ETH on Arbitrum into USDC.e (what freeze fees are paid in) through Uniswap, with at most 2% slippage. freeze_lock already does this step on its own when needed, so this is only for topping up. One transaction; the ETH is sent as value, no approval needed.",
-      inputSchema: z
-        .object({ usd: z.number().min(0.5).max(100).describe("How many dollars of USDC.e to get."), sender })
-        .strict(),
+        "Gets USDC.e on Arbitrum for freeze fees, paid from the user's own PayBox EVM wallet. " +
+        "from \"base\": moves USDC on Base to USDC.e on Arbitrum through Relay, plus a little ETH for network fees when the wallet has none (an allowance step first if Relay needs one, then the deposit; call again after each approval). " +
+        "from \"arbitrum\": swaps a little ETH on Arbitrum into USDC.e on Uniswap, at most 2% slippage. " +
+        "For USDC on Solana use freeze_fund_solana. Funds land in under a minute; then call freeze_lock again.",
+      inputSchema: z.object({ from: z.enum(["base", "arbitrum"]).optional().describe("Where the money comes from. Default arbitrum."), usd: fundUsd, sender }).strict(),
       outputSchema: evmOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ usd: dollars, sender: who }) => {
+    async ({ from, usd: dollars, sender: who }) => {
+      const target = BigInt(Math.round((dollars ?? 3) * 1e6));
+      if (from === "base") {
+        const gas = (await ethBalance(who)) < MIN_GAS_WEI ? GAS_TOPUP_USD6 : 0n;
+        const q = await relay.quote({ from: "base", user: who, recipient: who, usdce6: target, gasUsd6: gas });
+        const next = relay.nextEvmStep(q);
+        const proposal = proposeEvm({ chain: "eip155:8453", to: next.tx.to, value: next.tx.value, data: next.tx.data });
+        const what = `${usd6(q.usdceOut)} USDC.e${q.gasTopupUsd ? ` and $${Number(q.gasTopupUsd).toFixed(2)} of ETH for network fees` : ""} on Arbitrum for about ${Number(q.payIn).toFixed(2)} USDC on Base`;
+        const text =
+          next.id === "approve"
+            ? `Step 1 of 2 on Base: allow Relay to take ${Number(q.payIn).toFixed(2)} USDC from this wallet for the transfer (${what}). Approve in PayBox; once it confirms, call freeze_fund again with the same arguments.`
+            : `Move ${what} through Relay. Approve in PayBox. It usually lands within a minute; then call freeze_lock again.`;
+        return { ...proposal, content: [{ type: "text" as const, text }] };
+      }
       const [feedHex] = await readMany([{ to: ASSETS.ETH.feed, data: SEL.latestRoundData }]);
       const price = int256(wordAt(feedHex!, 1));
-      const target = BigInt(Math.round(dollars * 1e6));
       const wei = usd6ToWei(target, price);
       const minOut = (target * 98n) / 100n;
+      if ((await ethBalance(who)) < wei + MIN_GAS_WEI) throw new Error(NEEDS_FUNDING(who, target, true, true));
       const proposal = proposeEvm({ chain: ARBITRUM, to: UNISWAP.router, value: wei.toString(), data: encodeSwapEthToUsdce(who, wei, minOut) });
       return {
         ...proposal,
         content: [
           {
             type: "text" as const,
-            text: `Swap ${units(wei, 18, 8)} ETH (about ${usd6(target)}) for at least ${usd6(minOut)} USDC.e on Uniswap, Arbitrum. Approve in PayBox, then freeze.`,
+            text: `Swap ${units(wei, 18, 8)} ETH (about ${usd6(target)}) for at least ${usd6(minOut)} USDC.e on Uniswap, Arbitrum. Approve in PayBox, then call freeze_lock again.`,
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    "freeze_fund_solana",
+    {
+      title: "Freeze: pay the fee from Solana",
+      description:
+        "Moves USDC from the user's PayBox Solana wallet to USDC.e on their Arbitrum wallet through Relay, plus a little ETH for network fees when the Arbitrum wallet has none. " +
+        "One Solana transaction, one approval. Funds land in under a minute; then call freeze_lock again with the same arguments as before.",
+      inputSchema: z.object({ usd: fundUsd, sender, solana_sender: solanaSender }).strict(),
+      outputSchema: solanaOutputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ usd: dollars, sender: who, solana_sender: sol }) => {
+      const target = BigInt(Math.round((dollars ?? 3) * 1e6));
+      const gas = (await ethBalance(who)) < MIN_GAS_WEI ? GAS_TOPUP_USD6 : 0n;
+      const q = await relay.quote({ from: "solana", user: sol, recipient: who, usdce6: target, gasUsd6: gas });
+      const tx = relay.buildSolanaTx(sol, relay.solanaInstructions(q));
+      return {
+        ...proposeSolana({ transactionBase64: tx }),
+        content: [
+          {
+            type: "text" as const,
+            text: `Pay about ${Number(q.payIn).toFixed(2)} USDC from Solana to land ${usd6(q.usdceOut)} USDC.e${q.gasTopupUsd ? ` and $${Number(q.gasTopupUsd).toFixed(2)} of ETH for network fees` : ""} in ${who} on Arbitrum, through Relay. Approve in PayBox. It usually lands within a minute; then call freeze_lock again.`,
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    "freeze_auto_cash",
+    {
+      title: "Freeze: turn auto cash on or off",
+      description:
+        "Auto cash pays any freeze card that is worth something to its owner in its last 6 hours, so a forgotten win still pays. freeze_lock turns it on with the first freeze. " +
+        "Use this only when the user asks to switch it on or off. The auto cash contract can only cash cards to their owner; it cannot move cards or money anywhere else.",
+      inputSchema: z.object({ on: z.boolean(), sender }).strict(),
+      outputSchema: evmOutputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ on, sender: who }) => {
+      const [autoHex] = await readMany([{ to: HEGIC.cards, data: encodeIsApprovedForAll(who, AUTOCASH) }]);
+      if ((first(autoHex!) !== 0n) === on) throw new Error(`Auto cash is already ${on ? "on" : "off"} for this wallet.`);
+      return {
+        ...proposeEvm({ chain: ARBITRUM, to: HEGIC.cards, value: "0", data: encodeSetApprovalForAll(AUTOCASH, on) }),
+        content: [
+          {
+            type: "text" as const,
+            text: on
+              ? `Turn on auto cash for this wallet: winning freeze cards are cashed to their owner in their last 6 hours by ${AUTOCASH}. Approve in PayBox.`
+              : "Turn off auto cash for this wallet. Winning cards must then be cashed with freeze_use before they end. Approve in PayBox.",
           },
         ],
       };
@@ -380,10 +513,29 @@ function createServer() {
 
 // About $0.50 of ETH at today's prices: enough for the three Arbitrum transactions of a first freeze.
 const GAS_RESERVE_WEI = 200_000_000_000_000n;
-const NEEDS_FUNDING = (who: string) =>
-  `This wallet (${who}) has too little ETH on Arbitrum to pay the fee and network costs. ` +
-  `If the user's money is elsewhere (USDC on Solana or Base, for example), use PayBox's own request_swap to swap about $3 of it into native ETH on Arbitrum One (dst_chain eip155:42161) with this wallet as the recipient, ` +
-  `wait until get_request shows it settled, then call freeze_lock again with the same arguments. Otherwise ask the user to send a few dollars of ETH on Arbitrum to this wallet.`;
+// Below this the wallet can't pay Arbitrum network fees for the remaining steps (about $0.10).
+const MIN_GAS_WEI = 40_000_000_000_000n;
+// ETH delivered with a cross-chain payment when the Arbitrum wallet has none: $0.25, many freezes' worth of fees.
+const GAS_TOPUP_USD6 = 250_000n;
+
+/** USDC.e to bring for fees: today's fee plus room for the next freezes, at least $3. */
+function fundTarget(fee: bigint, have: bigint): bigint {
+  const want = (fee * 105n) / 100n + 500_000n;
+  const target = (want > 3_000_000n ? want : 3_000_000n) - (have < want ? have : 0n);
+  return ((target + 9_999n) / 10_000n) * 10_000n; // whole cents
+}
+
+const NEEDS_FUNDING = (who: string, target: bigint, fee: boolean, gas: boolean) => {
+  const dollars = Number(target) / 1e6;
+  const what = fee && gas ? `about ${usd6(target)} for freeze fees plus a little ETH for network fees` : fee ? `about ${usd6(target)} for freeze fees` : "a little ETH for network fees";
+  return (
+    `This Arbitrum wallet (${who}) needs ${what} before it can freeze. Nothing has been bought. ` +
+    `Ask the user where to pay from, then call one of these and, once it lands (under a minute), call freeze_lock again with the same arguments: ` +
+    `USDC on Solana: freeze_fund_solana with usd ${dollars}, sender ${who} and solana_sender set to their PayBox Solana address. ` +
+    `USDC on Base: freeze_fund with from "base", usd ${dollars} and sender ${who}. ` +
+    `ETH on Arbitrum: send a few dollars of ETH to ${who}, then call freeze_lock again.`
+  );
+};
 
 // Freeze launched after this block; cards bought through Freeze are all later.
 const FREEZE_START_BLOCK = 515_500_000;
@@ -398,8 +550,10 @@ async function readCard(id: bigint) {
   const asset = (Object.keys(ASSETS) as Asset[]).find((a) => ASSETS[a].strategy.toLowerCase() === strategy.toLowerCase());
   if (!asset) throw new Error(`Card ${id} is not a Freeze card (not a BTC or ETH call).`);
   const cfg = ASSETS[asset];
+  const locked = wordAt(liq!, 0) === 1n; // Hegic unlocks a card once it is cashed
   const fee = wordAt(liq!, 3);
   const expiry = Number(wordAt(liq!, 4));
+  const open = expiry > Math.floor(Date.now() / 1000);
   const [data, pay, feed] = await readMany([
     { to: cfg.strategy, data: encodeUint(SEL.strategyData, id) },
     { to: cfg.strategy, data: encodeUint(SEL.payOffAmount, id) },
@@ -422,7 +576,8 @@ async function readCard(id: bigint) {
       worth_now: usd6(payout),
       fee_paid: usd6(fee),
       ends_utc: new Date(expiry * 1000).toISOString().replace(/\.\d{3}Z$/, "Z"),
-      active: expiry > Math.floor(Date.now() / 1000),
+      active: locked && open,
+      status: (!open ? "ended" : locked ? "open" : "cashed") as "open" | "cashed" | "ended",
       link: `${SITE}/card.html?id=${id}`,
     },
   };
