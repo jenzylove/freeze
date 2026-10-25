@@ -1,15 +1,15 @@
 {
-  "updated": "2026-10-24T20:27:37Z",
-  "scannedTo": 517943067,
+  "updated": "2026-10-25T09:59:37Z",
+  "scannedTo": 518109791,
   "autoCashContract": "0x679399608d973c2476d1D9ECd8eB1150e97936Ec",
   "totals": {
     "freezes": 2,
     "people": 1,
-    "open": 1,
+    "open": 0,
     "paidOut": 0,
     "feesPaid": 0.82,
     "won": 0,
-    "finished": 1
+    "finished": 2
   },
   "cards": [
     {
@@ -22,7 +22,7 @@
       "frozenPrice": 81617.28,
       "fee": 0.426664,
       "ends": 1792916309,
-      "status": "open",
+      "status": "ended",
       "worthNow": 0,
       "autoCash": false
     },
