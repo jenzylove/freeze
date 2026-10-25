@@ -154,7 +154,7 @@ PayBox as the `sender` argument, so a user never types it.
 | Part | Status |
 |---|---|
 | Plugin in PayBox | Live in the PayBox Community Plugins marketplace, 9 tools, starter conformance passing |
-| Auto cash contract | [`0x6793…36Ec`](https://arbiscan.io/address/0x679399608d973c2476d1D9ECd8eB1150e97936Ec) on Arbitrum, 6 fork tests against live cards (`forge test` in `contracts/`) |
+| Auto cash contract | [`0x6793…36Ec`](https://arbiscan.io/address/0x679399608d973c2476d1D9ECd8eB1150e97936Ec) on Arbitrum, [deployed](https://arbiscan.io/tx/0x3eff63441e4bd298eb8ce500b666c7a0f3e51fc6e4b52c9ffb7de8febd46ea2e) Oct 25, [source verified](https://repo.sourcify.dev/42161/0x679399608d973c2476d1D9ECd8eB1150e97936Ec) (exact match), 6 fork tests against live cards (`forge test` in `contracts/`) |
 | Freezes on Arbitrum mainnet | 2, both made through PayBox with real money: [card 16686](https://arbiscan.io/tx/0x28538aa56aa35300f67740f1afc0a14136abc1fb49a1ba77ab72c64b28411afc), [card 16685](https://arbiscan.io/tx/0x6c819fea4aa0059b7514a8f97380193c1b03b1e93b2604367f31b533fe73893f) |
 | Payout | Tested on a fork of mainnet: price moved to $2,900, card paid 19.25 USDC, a stranger was refused ([spike notes](docs/spikes/hegic-engine.md)) |
 | Prices and fees on the site | Read live from Arbitrum on every load, never stored |
