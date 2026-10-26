@@ -1,17 +1,31 @@
 {
-  "updated": "2026-10-25T09:59:37Z",
-  "scannedTo": 518109791,
+  "updated": "2026-10-26T00:58:48Z",
+  "scannedTo": 518294190,
   "autoCashContract": "0x679399608d973c2476d1D9ECd8eB1150e97936Ec",
   "totals": {
-    "freezes": 2,
+    "freezes": 3,
     "people": 1,
-    "open": 0,
+    "open": 1,
     "paidOut": 0,
-    "feesPaid": 0.82,
+    "feesPaid": 3.46,
     "won": 0,
     "finished": 2
   },
   "cards": [
+    {
+      "card": "16713",
+      "buyer": "0xed56612680268428B77B8dc806d61280f6673837",
+      "opened": 1792975363,
+      "buyTx": "0x8fe6e1678c222229593b625ff24ba2fc47e645f6d529474c62db9ba9682ed43b",
+      "asset": "ETH",
+      "amount": 0.012892911477269797,
+      "frozenPrice": 2326.86,
+      "fee": 2.631032,
+      "ends": 1798159363,
+      "status": "open",
+      "worthNow": 0,
+      "autoCash": true
+    },
     {
       "card": "16686",
       "buyer": "0xed56612680268428B77B8dc806d61280f6673837",
@@ -24,7 +38,7 @@
       "ends": 1792916309,
       "status": "ended",
       "worthNow": 0,
-      "autoCash": false
+      "autoCash": true
     },
     {
       "card": "16685",
@@ -38,7 +52,7 @@
       "ends": 1792821708,
       "status": "ended",
       "worthNow": 0,
-      "autoCash": false
+      "autoCash": true
     }
   ]
 }
