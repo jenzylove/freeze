@@ -249,7 +249,7 @@ function createServer() {
             ],
           };
         }
-        throw new Error(NEEDS_FUNDING(who, fundTarget(q.fee, bal), needFee, needGas, pay_from));
+        throw new Error(NEEDS_FUNDING(who, needFee ? fundTarget(q.fee, bal) : 1_000_000n, needFee, needGas, pay_from));
       }
       if (needAllow) {
         // First freeze from this wallet: hand back the allowance step so the agent never dead ends.
@@ -276,6 +276,10 @@ function createServer() {
         };
       }
       const out = describe(q);
+      const source =
+        pay_from === "solana" || pay_from === "base"
+          ? " The fee is paid from the USDC.e in this Arbitrum wallet."
+          : "";
       const proposal = proposeEvm({
         chain: ARBITRUM,
         to: HEGIC.treasury,
@@ -287,7 +291,7 @@ function createServer() {
         content: [
           {
             type: "text" as const,
-            text: `Last step: freeze ${out.asset} at ${out.frozen_price} on ${out.amount} for ${out.days} days, fee about ${out.fee} (the market sets the exact fee when it goes through). The freeze card goes to ${who}. Approve in PayBox; once it confirms, call freeze_cards to show the card and its link.`,
+            text: `Last step: freeze ${out.asset} at ${out.frozen_price} on ${out.amount} for ${out.days} days, fee about ${out.fee} (the market sets the exact fee when it goes through). The freeze card goes to ${who}.${source} Approve in PayBox; once it confirms, call freeze_cards to show the card and its link.`,
           },
         ],
       };
@@ -433,7 +437,9 @@ function createServer() {
         const gas = (await ethBalance(who)) < MIN_GAS_WEI ? GAS_TOPUP_USD6 : 0n;
         const q = await relay.quote({ from: "base", user: who, recipient: who, usdce6: target, gasUsd6: gas });
         const next = relay.nextEvmStep(q);
-        const proposal = proposeEvm({ chain: "eip155:8453", to: next.tx.to, value: next.tx.value, data: next.tx.data });
+        // Give the allowance 3% headroom so a small price move before the deposit doesn't need a second approval.
+        const data = next.id === "approve" && next.tx.data.startsWith("0x095ea7b3") ? withHeadroom(next.tx.data) : next.tx.data;
+        const proposal = proposeEvm({ chain: "eip155:8453", to: next.tx.to, value: next.tx.value, data });
         const what = `${usd6(q.usdceOut)} USDC.e${q.gasTopupUsd ? ` and $${Number(q.gasTopupUsd).toFixed(2)} of ETH for network fees` : ""} on Arbitrum for about ${Number(q.payIn).toFixed(2)} USDC on Base`;
         const text =
           next.id === "approve"
@@ -480,7 +486,7 @@ function createServer() {
         content: [
           {
             type: "text" as const,
-            text: `Pay about ${Number(q.payIn).toFixed(2)} USDC from Solana to land ${usd6(q.usdceOut)} USDC.e${q.gasTopupUsd ? ` and $${Number(q.gasTopupUsd).toFixed(2)} of ETH for network fees` : ""} in ${who} on Arbitrum, through Relay. Approve in PayBox. It usually lands within a minute; then call freeze_lock again.`,
+            text: `Pay about ${Number(q.payIn).toFixed(2)} USDC from Solana to land ${usd6(q.usdceOut)} USDC.e${q.gasTopupUsd ? ` and $${Number(q.gasTopupUsd).toFixed(2)} of ETH for network fees` : ""} in ${who} on Arbitrum, through Relay. Approve in PayBox. It usually lands within a minute; then call freeze_lock again. Don't call freeze_fund_solana again for this freeze: if freeze_lock still says money is missing, wait 30 seconds and call freeze_lock again.`,
           },
         ],
       };
@@ -525,6 +531,12 @@ const MIN_GAS_WEI = 40_000_000_000_000n;
 // ETH delivered with a cross-chain payment when the Arbitrum wallet has none: $0.25, many freezes' worth of fees.
 const GAS_TOPUP_USD6 = 250_000n;
 
+/** approve(spender, amount) with the amount raised 3%. */
+function withHeadroom(data: string): string {
+  const amount = BigInt("0x" + data.slice(74, 138));
+  return data.slice(0, 74) + ((amount * 103n) / 100n).toString(16).padStart(64, "0");
+}
+
 /** USDC.e to bring for fees: today's fee plus room for the next freezes, at least $3. */
 function fundTarget(fee: bigint, have: bigint): bigint {
   const want = (fee * 105n) / 100n + 500_000n;
@@ -537,14 +549,15 @@ const NEEDS_FUNDING = (who: string, target: bigint, fee: boolean, gas: boolean, 
   const what = fee && gas ? `about ${usd6(target)} for freeze fees plus a little ETH for network fees` : fee ? `about ${usd6(target)} for freeze fees` : "a little ETH for network fees";
   const again = "Once it lands (usually under a minute), call freeze_lock again with the same arguments.";
   if (from === "solana")
-    return `The user chose to pay from Solana. Next: call freeze_fund_solana with usd ${dollars}, sender ${who} and solana_sender set to their PayBox Solana address, to bring ${what} to Arbitrum in one approval. Nothing has been bought yet. ${again}`;
+    return `The user chose to pay from Solana. If a Solana payment for this freeze was already approved in this conversation, don't pay again: it is on its way, so wait 30 seconds and call freeze_lock again. Otherwise call freeze_fund_solana with usd ${dollars}, sender ${who} and solana_sender set to their PayBox Solana address, to bring ${what} to Arbitrum in one approval. Nothing has been bought yet. ${again}`;
   if (from === "base")
-    return `The user chose to pay from Base. Next: call freeze_fund with from "base", usd ${dollars} and sender ${who}, to bring ${what} to Arbitrum. Nothing has been bought yet. ${again}`;
+    return `The user chose to pay from Base. If a Base deposit for this freeze was already approved in this conversation, don't pay again: wait 30 seconds and call freeze_lock again. Otherwise call freeze_fund with from "base", usd ${dollars} and sender ${who}, to bring ${what} to Arbitrum. Nothing has been bought yet. ${again}`;
   if (from === "arbitrum")
     return `This Arbitrum wallet (${who}) doesn't have enough ETH for ${what}. Ask the user to send a few dollars of ETH on Arbitrum to it, or to pay from Solana or Base instead. Nothing has been bought.`;
   return (
     `This Arbitrum wallet (${who}) needs ${what} before it can freeze. Nothing has been bought. ` +
-    `Ask the user where to pay from, then call one of these and, once it lands (under a minute), call freeze_lock again with the same arguments: ` +
+    `If a payment for this freeze was already approved in this conversation, don't pay again: wait 30 seconds and call freeze_lock again. ` +
+    `Otherwise ask the user where to pay from, then call one of these and, once it lands (under a minute), call freeze_lock again with the same arguments: ` +
     `USDC on Solana: freeze_fund_solana with usd ${dollars}, sender ${who} and solana_sender set to their PayBox Solana address. ` +
     `USDC on Base: freeze_fund with from "base", usd ${dollars} and sender ${who}. ` +
     `ETH on Arbitrum: send a few dollars of ETH to ${who}, then call freeze_lock again.`
