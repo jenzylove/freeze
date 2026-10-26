@@ -499,7 +499,8 @@ function createServer() {
       if (lamports !== undefined && lamports < solana.MIN_LAMPORTS)
         return nextStep(
           `Nothing was sent. This Solana wallet (${sol}) has no SOL, and every Solana transaction needs a tiny network fee paid in SOL (about $0.001). ` +
-            `Ask the user to add a little SOL to it (even $0.10 is plenty), then call freeze_fund_solana again. Or pay from Base or Arbitrum instead.`,
+            `PayBox doesn't let anyone else pay that fee, so the wallet needs a few cents of SOL first (even $0.10 is plenty). Easiest ways: Fund Wallet in PayBox to buy a little SOL, or send a few cents of SOL from any exchange or wallet to ${sol}. ` +
+            `Then call freeze_fund_solana again. If the user's Arbitrum or Base wallet already holds enough for the fee, paying from there works too.`,
         );
       const short = (cost: string) =>
         nextStep(
