@@ -92,3 +92,19 @@ export async function ethBalance(who: string): Promise<bigint> {
     return BigInt(res.result);
   });
 }
+
+const BASE_RPCS = (process.env.BASE_RPC ?? "https://mainnet.base.org,https://base-rpc.publicnode.com").split(",");
+
+/** Native ETH on Base in wei, or undefined if no Base RPC answered (best effort). */
+export async function baseEthBalance(who: string): Promise<bigint | undefined> {
+  const body = { jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [who, "latest"] };
+  try {
+    return await withFallback(BASE_RPCS, body, (raw) => {
+      const res = raw as { result?: string };
+      if (!res.result) throw new Error("no result");
+      return BigInt(res.result);
+    });
+  } catch {
+    return undefined;
+  }
+}

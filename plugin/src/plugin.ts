@@ -2,8 +2,9 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
 import { evmOutputSchema, proposeEvm, proposeSolana, solanaOutputSchema } from "./paybox.js";
-import { cardIdsSentTo, ethBalance, first, readMany } from "./chain.js";
+import { baseEthBalance, cardIdsSentTo, ethBalance, first, readMany } from "./chain.js";
 import * as relay from "./relay.js";
+import * as solana from "./solana.js";
 import {
   ARBITRUM,
   ASSETS,
@@ -40,6 +41,14 @@ import {
 } from "./core.js";
 
 const PROTOCOL_VERSION = "2026-07-28";
+const PROPOSAL = "io.paybox/transactionProposal";
+
+// Money tools return either a proposal to approve, or the next step in plain words (never an error),
+// so the agent can carry on: for example "bring the fee over from Solana first".
+const nextStepField = z.string().optional().describe("What to do next when there is nothing to approve yet.");
+const evmOrNextStep = z.object({ [PROPOSAL]: evmOutputSchema.shape[PROPOSAL].optional(), next_step: nextStepField }).strict();
+const solanaOrNextStep = z.object({ [PROPOSAL]: solanaOutputSchema.shape[PROPOSAL].optional(), next_step: nextStepField }).strict();
+const nextStep = (text: string) => ({ content: [{ type: "text" as const, text }], structuredContent: { next_step: text } });
 
 const asset = z.enum(["BTC", "ETH"]).describe("What to freeze: BTC (7 to 14 days) or ETH (60 to 90 days).");
 const usd = z
@@ -209,7 +218,7 @@ function createServer() {
             .describe("Default true. Auto cash pays a winning card to its owner in its last 6 hours. Set false only if the user asks to turn it off."),
         })
         .strict(),
-      outputSchema: evmOutputSchema,
+      outputSchema: evmOrNextStep,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ asset: a, usd: dollars, days: d, sender: who, pay_from, auto_cash }) => {
@@ -249,7 +258,7 @@ function createServer() {
             ],
           };
         }
-        throw new Error(NEEDS_FUNDING(who, needFee ? fundTarget(q.fee, bal) : 1_000_000n, needFee, needGas, pay_from));
+        return nextStep(NEEDS_FUNDING(who, needFee ? fundTarget(q.fee, bal) : 1_000_000n, needFee, needGas, pay_from));
       }
       if (needAllow) {
         // First freeze from this wallet: hand back the allowance step so the agent never dead ends.
@@ -428,13 +437,20 @@ function createServer() {
         "from \"arbitrum\": swaps a little ETH on Arbitrum into USDC.e on Uniswap, at most 2% slippage. " +
         "For USDC on Solana use freeze_fund_solana. Funds land in under a minute; then call freeze_lock again.",
       inputSchema: z.object({ from: z.enum(["base", "arbitrum"]).optional().describe("Where the money comes from. Default arbitrum."), usd: fundUsd, sender }).strict(),
-      outputSchema: evmOutputSchema,
+      outputSchema: evmOrNextStep,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ from, usd: dollars, sender: who }) => {
       const target = BigInt(Math.round((dollars ?? 3) * 1e6));
       if (from === "base") {
-        const gas = (await ethBalance(who)) < MIN_GAS_WEI ? GAS_TOPUP_USD6 : 0n;
+        const [arbEth, baseEth] = await Promise.all([ethBalance(who), baseEthBalance(who)]);
+        // Base transactions cost a fraction of a cent, paid in ETH on Base.
+        if (baseEth !== undefined && baseEth < 2_000_000_000_000n)
+          return nextStep(
+            `Nothing was sent. This wallet has no ETH on Base, and every Base transaction needs a tiny network fee paid in ETH (well under a cent). ` +
+              `Ask the user to add a little ETH on Base (even $0.10 is plenty), then call freeze_fund again. Or pay from Solana or Arbitrum instead.`,
+          );
+        const gas = arbEth < MIN_GAS_WEI ? GAS_TOPUP_USD6 : 0n;
         const q = await relay.quote({ from: "base", user: who, recipient: who, usdce6: target, gasUsd6: gas });
         const next = relay.nextEvmStep(q);
         // Give the allowance 3% headroom so a small price move before the deposit doesn't need a second approval.
@@ -451,7 +467,7 @@ function createServer() {
       const price = int256(wordAt(feedHex!, 1));
       const wei = usd6ToWei(target, price);
       const minOut = (target * 98n) / 100n;
-      if ((await ethBalance(who)) < wei + MIN_GAS_WEI) throw new Error(NEEDS_FUNDING(who, target, true, true));
+      if ((await ethBalance(who)) < wei + MIN_GAS_WEI) return nextStep(NEEDS_FUNDING(who, target, true, true));
       const proposal = proposeEvm({ chain: ARBITRUM, to: UNISWAP.router, value: wei.toString(), data: encodeSwapEthToUsdce(who, wei, minOut) });
       return {
         ...proposal,
@@ -473,20 +489,43 @@ function createServer() {
         "Moves USDC from the user's PayBox Solana wallet to USDC.e on their Arbitrum wallet through Relay, plus a little ETH for network fees when the Arbitrum wallet has none. " +
         "One Solana transaction, one approval. Funds land in under a minute; then call freeze_lock again with the same arguments as before.",
       inputSchema: z.object({ usd: fundUsd, sender, solana_sender: solanaSender }).strict(),
-      outputSchema: solanaOutputSchema,
+      outputSchema: solanaOrNextStep,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ usd: dollars, sender: who, solana_sender: sol }) => {
       const target = BigInt(Math.round((dollars ?? 3) * 1e6));
       const gas = (await ethBalance(who)) < MIN_GAS_WEI ? GAS_TOPUP_USD6 : 0n;
-      const q = await relay.quote({ from: "solana", user: sol, recipient: who, usdce6: target, gasUsd6: gas });
+      const [lamports, held] = await Promise.all([solana.lamports(sol), solana.usdc(sol)]);
+      if (lamports !== undefined && lamports < solana.MIN_LAMPORTS)
+        return nextStep(
+          `Nothing was sent. This Solana wallet (${sol}) has no SOL, and every Solana transaction needs a tiny network fee paid in SOL (about $0.001). ` +
+            `Ask the user to add a little SOL to it (even $0.10 is plenty), then call freeze_fund_solana again. Or pay from Base or Arbitrum instead.`,
+        );
+      const short = (cost: string) =>
+        nextStep(
+          `Nothing was sent. This Solana wallet holds ${usd6(held ?? 0n)} of USDC, and bringing ${usd6(target)} over costs about ${cost} USDC. ` +
+            `Ask the user to add USDC on Solana, or bring a smaller amount with a lower usd (at least what freeze_lock asked for).`,
+        );
+      if (held !== undefined && held < target) return short(`${usd6(target)} plus Relay's small fee`);
+      let q: relay.RelayQuote;
+      try {
+        q = await relay.quote({ from: "solana", user: sol, recipient: who, usdce6: target, gasUsd6: gas });
+      } catch (e) {
+        return nextStep(`Nothing was sent. ${(e as Error).message} Check this Solana wallet has USDC and a little SOL for fees, then try freeze_fund_solana again in a moment.`);
+      }
+      if (held !== undefined && held < BigInt(Math.ceil(Number(q.payIn) * 1e6))) return short(Number(q.payIn).toFixed(2));
       const tx = relay.buildSolanaTx(sol, relay.solanaInstructions(q));
+      const sim = await solana.simulate(tx);
+      if (sim)
+        return nextStep(
+          `Nothing was sent. A test run of this Solana transfer failed on Solana: ${sim}. Check the wallet has a little SOL for fees and enough USDC, then call freeze_fund_solana again.`,
+        );
       return {
         ...proposeSolana({ transactionBase64: tx }),
         content: [
           {
             type: "text" as const,
-            text: `Pay about ${Number(q.payIn).toFixed(2)} USDC from Solana to land ${usd6(q.usdceOut)} USDC.e${q.gasTopupUsd ? ` and $${Number(q.gasTopupUsd).toFixed(2)} of ETH for network fees` : ""} in ${who} on Arbitrum, through Relay. Approve in PayBox. It usually lands within a minute; then call freeze_lock again. Don't call freeze_fund_solana again for this freeze: if freeze_lock still says money is missing, wait 30 seconds and call freeze_lock again.`,
+            text: `Pay about ${Number(q.payIn).toFixed(2)} USDC from Solana to land ${usd6(q.usdceOut)} USDC.e${q.gasTopupUsd ? ` and $${Number(q.gasTopupUsd).toFixed(2)} of ETH for network fees` : ""} in ${who} on Arbitrum, through Relay. Approve in PayBox within about 4 minutes, before this proposal expires. It usually lands within a minute; then call freeze_lock again. Don't call freeze_fund_solana again for this freeze: if freeze_lock still says money is missing, wait 30 seconds and call freeze_lock again.`,
           },
         ],
       };

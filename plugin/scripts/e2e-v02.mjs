@@ -45,11 +45,15 @@ console.log("new wallet", owner);
 
 // 1. Empty wallet, user said "using my funds on Solana".
 let r = await call("freeze_lock", args);
-check(r.error && /freeze_fund_solana/.test(r.text) && /don't pay again/.test(r.text), "freeze_lock on an empty wallet sends the agent to freeze_fund_solana, with the no double pay line");
+check(!r.error && r.s?.next_step && /freeze_fund_solana/.test(r.text) && /don't pay again/.test(r.text), "freeze_lock on an empty wallet returns a next step (not an error) pointing to freeze_fund_solana");
 const usd = Number(/usd ([\d.]+)/.exec(r.text)?.[1]);
 check(usd >= 3, `asks to bring at least $3 (got $${usd})`);
 
-// 2. The Solana deposit itself (real Relay quote).
+// 2a. A Solana wallet with no SOL gets a plain next step, nothing proposed.
+r = await call("freeze_fund_solana", { usd, sender: owner, solana_sender: "EGp5tMXK9VVhE5n1LuGzAjbroXSeYZ8Wcstfy8UQc9vU" });
+check(!r.error && !r.p && /SOL/.test(r.text) && /Nothing was sent/.test(r.text), "Solana wallet without SOL: told to add a little SOL, nothing proposed");
+
+// 2. The Solana deposit itself (real Relay quote, from a wallet that has SOL and USDC).
 r = await call("freeze_fund_solana", { usd, sender: owner, solana_sender: SOL });
 check(!r.error && r.p?.kind === "solana" && r.p.chain === "solana:mainnet", "freeze_fund_solana returns a Solana proposal");
 check(/\$0\.25 of ETH for network fees/.test(r.text), "includes $0.25 of gas because the Arbitrum wallet is empty");
@@ -88,13 +92,19 @@ check(!r.error && /Last step/.test(r.text) && /paid from the USDC\.e/.test(r.tex
 // 7. Gas only: plenty of USDC.e but no ETH asks for $1, not $3.
 cast("rpc", "anvil_setBalance", owner, "0x0");
 r = await call("freeze_lock", args);
-check(r.error && /usd 1[ ,]/.test(r.text), "no ETH for gas: asks to bring $1");
+check(!r.error && r.s?.next_step && /usd 1[ ,]/.test(r.text), "no ETH for gas: next step asks to bring $1");
 
-// 8. Base path: allowance proposal on Base with 3% headroom.
+// 8. Base path.
 r = await call("freeze_fund", { from: "base", usd: 3, sender: owner });
-const approveAmt = r.p ? BigInt("0x" + r.p.transaction.data.slice(74, 138)) : 0n;
-check(!r.error && r.p?.chain === "eip155:8453" && r.p.transaction.data.startsWith("0x095ea7b3"), "freeze_fund from base returns the Base allowance step");
-check(approveAmt > 3_000_000n * 103n / 100n, `allowance has headroom (${Number(approveAmt) / 1e6} USDC for a $3 transfer)`);
+check(!r.error && !r.p && /no ETH on Base/.test(r.text), "Base path with no ETH on Base: told to add a little, nothing proposed");
+// A Base wallet that has ETH and USDC (seen holding a Relay allowance on Base).
+r = await call("freeze_fund", { from: "base", usd: 3, sender: "0xdc4cebf99cdc2185ff8b2bb3fc347ec3a7477311" });
+check(!r.error && r.p?.chain === "eip155:8453", "freeze_fund from base with ETH on Base returns a Base proposal");
+check(r.p?.transaction.data.startsWith("0x095ea7b3") === false, "a wallet that already allowed Relay goes straight to the deposit");
+// A Base wallet with ETH but no Relay allowance: the allowance step, with 3% headroom.
+r = await call("freeze_fund", { from: "base", usd: 3, sender: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" });
+const amt = r.p?.transaction.data.startsWith("0x095ea7b3") ? BigInt("0x" + r.p.transaction.data.slice(74, 138)) : 0n;
+check(!r.error && amt > 3_000_000n * 103n / 100n, `allowance step has headroom (${Number(amt) / 1e6} USDC for a $3 transfer)`);
 
 console.log(failures ? `\n${failures} FAILED` : "\nALL PASSED");
 process.exit(failures ? 1 : 0);
