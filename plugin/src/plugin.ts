@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
 import { evmOutputSchema, proposeEvm, proposeSolana, solanaOutputSchema } from "./paybox.js";
-import { baseEthBalance, cardIdsSentTo, ethBalance, first, readMany } from "./chain.js";
+import { baseEthBalance, baseUsdcBalance, cardIdsSentTo, ethBalance, first, readMany } from "./chain.js";
 import * as relay from "./relay.js";
 import * as solana from "./solana.js";
 import {
@@ -131,7 +131,7 @@ const quoteOutput = z
   .strict();
 
 function createServer() {
-  const server = new McpServer({ name: "freeze", version: "0.2.1" }, { supportedProtocolVersions: [PROTOCOL_VERSION] });
+  const server = new McpServer({ name: "freeze", version: "0.2.2" }, { supportedProtocolVersions: [PROTOCOL_VERSION] });
 
   server.registerTool(
     "freeze_quote",
@@ -143,7 +143,7 @@ function createServer() {
         "It tells them what it costs to freeze today's BTC or ETH price for a dollar amount, read live from the Hegic options market on Arbitrum. " +
         "A freeze is the right, until the end date, to be paid the difference if the price rises above today's price. " +
         "The most the user can lose is the fee. Use this before freeze_lock and show the user the fee, frozen price, end date and break-even price in plain words. " +
-        "The user needs only a few dollars for the fee, not the full amount, and can pay it from USDC on Solana, USDC on Base, or ETH on Arbitrum. " +
+        "The user needs only a few dollars for the fee, not the full amount, and can pay it from USDC or SOL on Solana, USDC or ETH on Base, or ETH on Arbitrum. " +
         "Every freeze comes with auto cash: if it is worth something in its last hours, it is cashed to the user automatically, so a forgotten win still pays.",
       inputSchema: z.object({ asset, usd, days }).strict(),
       outputSchema: quoteOutput,
@@ -155,7 +155,7 @@ function createServer() {
         `${out.fee} freezes ${out.asset} at ${out.frozen_price} on ${out.amount} (about $${dollars}) for ${out.days} days, until ${out.ends_utc}. ` +
         `If ${out.asset} is above ${out.frozen_price} when it's used, the freeze pays the difference in USDC; it pays for itself above ${out.break_even_price}. ` +
         `Most you can lose: ${out.max_loss}. You can cash it any time before ${out.ends_utc}; if it is still worth something in its last 6 hours, auto cash pays it to you. ` +
-        `The fee can be paid from USDC on Solana, USDC on Base, or ETH on Arbitrum.` +
+        `The fee can be paid from USDC or SOL on Solana, USDC or ETH on Base, or ETH on Arbitrum.` +
         (out.available ? "" : " The market can't sell a freeze this size right now; try a smaller amount.") +
         (out.note ? ` ${out.note}` : "");
       return { content: [{ type: "text" as const, text }], structuredContent: out };
@@ -210,7 +210,7 @@ function createServer() {
             .enum(["solana", "base", "arbitrum"])
             .optional()
             .describe(
-              "Where the user wants the fee paid from, if they said so: \"my funds on Solana\" or \"my Solana USDC\" is solana, USDC on Base is base, ETH on Arbitrum is arbitrum. Leave it out if they didn't say.",
+              "Where the user wants the fee paid from, if they said so: anything on Solana (USDC or SOL) is solana, anything on Base (USDC or ETH) is base, ETH on Arbitrum is arbitrum. Leave it out if they didn't say.",
             ),
           auto_cash: z
             .boolean()
@@ -419,13 +419,15 @@ function createServer() {
   const solanaSender = z
     .string()
     .regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
-    .describe("The user's PayBox Solana wallet public address, which pays the USDC. Fill it in yourself from the selected Solana wallet; never ask the user to type it.");
+    .describe("The user's PayBox Solana wallet public address, which pays. Fill it in yourself from the selected Solana wallet; never ask the user to type it.");
   const fundUsd = z
     .number()
-    .min(1)
+    .min(0.5)
     .max(100)
     .optional()
-    .describe("Dollars of USDC.e to land on Arbitrum for freeze fees. Use the amount freeze_lock named; default 3.");
+    .describe("Dollars of USDC.e to land on Arbitrum for freeze fees. Use the amount freeze_lock named; default 1.");
+  const coinAmount = (q: relay.RelayQuote) =>
+    q.coin === "USDC" ? `${Number(q.payIn).toFixed(2)} USDC` : `${Number(q.payIn).toFixed(q.coin === "SOL" ? 4 : 6)} ${q.coin}`;
 
   server.registerTool(
     "freeze_fund",
@@ -433,34 +435,50 @@ function createServer() {
       title: "Freeze: pay the fee from Base or Arbitrum",
       description:
         "Gets USDC.e on Arbitrum for freeze fees, paid from the user's own PayBox EVM wallet. " +
-        "from \"base\": moves USDC on Base to USDC.e on Arbitrum through Relay, plus a little ETH for network fees when the wallet has none (an allowance step first if Relay needs one, then the deposit; call again after each approval). " +
+        "from \"base\": moves USDC or ETH on Base to Arbitrum through Relay, plus a little ETH for network fees when the Arbitrum wallet has none. It pays with USDC when the wallet has enough, otherwise with ETH on Base. With ETH it is one transaction; with USDC an allowance step may come first (call again after it confirms). " +
         "from \"arbitrum\": swaps a little ETH on Arbitrum into USDC.e on Uniswap, at most 2% slippage. " +
-        "For USDC on Solana use freeze_fund_solana. Funds land in under a minute; then call freeze_lock again.",
-      inputSchema: z.object({ from: z.enum(["base", "arbitrum"]).optional().describe("Where the money comes from. Default arbitrum."), usd: fundUsd, sender }).strict(),
+        "For Solana use freeze_fund_solana. Funds land in under a minute; then call freeze_lock again.",
+      inputSchema: z
+        .object({
+          from: z.enum(["base", "arbitrum"]).optional().describe("Where the money comes from. Default arbitrum."),
+          usd: fundUsd,
+          pay_with: z.enum(["usdc", "eth"]).optional().describe("Base only. Leave out to let Freeze pick from what the wallet holds."),
+          sender,
+        })
+        .strict(),
       outputSchema: evmOrNextStep,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ from, usd: dollars, sender: who }) => {
-      const target = BigInt(Math.round((dollars ?? 3) * 1e6));
+    async ({ from, usd: dollars, pay_with, sender: who }) => {
+      const target = BigInt(Math.round((dollars ?? 1) * 1e6));
       if (from === "base") {
-        const [arbEth, baseEth] = await Promise.all([ethBalance(who), baseEthBalance(who)]);
-        // Base transactions cost a fraction of a cent, paid in ETH on Base.
-        if (baseEth !== undefined && baseEth < 2_000_000_000_000n)
-          return nextStep(
-            `Nothing was sent. This wallet has no ETH on Base, and every Base transaction needs a tiny network fee paid in ETH (well under a cent). ` +
-              `Ask the user to add a little ETH on Base (even $0.10 is plenty), then call freeze_fund again. Or pay from Solana or Arbitrum instead.`,
-          );
+        const [arbEth, baseEth, baseUsdc] = await Promise.all([ethBalance(who), baseEthBalance(who), baseUsdcBalance(who)]);
         const gas = arbEth < MIN_GAS_WEI ? GAS_TOPUP_USD6 : 0n;
-        const q = await relay.quote({ from: "base", user: who, recipient: who, usdce6: target, gasUsd6: gas });
+        const useUsdc = pay_with ? pay_with === "usdc" : baseUsdc === undefined || baseUsdc >= (target * 105n) / 100n + gas;
+        let q: relay.RelayQuote;
+        try {
+          q = await relay.quote({ from: "base", user: who, recipient: who, usdce6: target, gasUsd6: gas, pay: useUsdc ? "usdc" : "native" });
+        } catch (e) {
+          return nextStep(`Nothing was sent. ${(e as Error).message} Try freeze_fund again in a moment.`);
+        }
+        // Base network fees are a fraction of a cent, paid in ETH on Base.
+        const reserve = 5_000_000_000_000n;
+        const needEth = (useUsdc ? 0n : q.payInRaw) + reserve;
+        if (baseEth !== undefined && baseEth < needEth)
+          return nextStep(
+            useUsdc
+              ? `Nothing was sent. This wallet has no ETH on Base for the network fee (well under a cent). Ask the user to add a little ETH on Base, then call freeze_fund again.`
+              : `Nothing was sent. Paying from Base takes about ${coinAmount(q)} (fee money plus network costs), and this wallet holds ${units(baseEth, 18, 6)} ETH and ${usd6(baseUsdc ?? 0n)} USDC on Base. Ask the user to add a little ETH or USDC on Base, or pay from Solana or Arbitrum.`,
+          );
         const next = relay.nextEvmStep(q);
-        // Give the allowance 3% headroom so a small price move before the deposit doesn't need a second approval.
+        // Give a USDC allowance 3% headroom so a small price move before the deposit doesn't need a second approval.
         const data = next.id === "approve" && next.tx.data.startsWith("0x095ea7b3") ? withHeadroom(next.tx.data) : next.tx.data;
         const proposal = proposeEvm({ chain: "eip155:8453", to: next.tx.to, value: next.tx.value, data });
-        const what = `${usd6(q.usdceOut)} USDC.e${q.gasTopupUsd ? ` and $${Number(q.gasTopupUsd).toFixed(2)} of ETH for network fees` : ""} on Arbitrum for about ${Number(q.payIn).toFixed(2)} USDC on Base`;
+        const what = `${usd6(q.usdceOut)} USDC.e${q.gasTopupUsd ? ` and $${Number(q.gasTopupUsd).toFixed(2)} of ETH for network fees` : ""} on Arbitrum for about ${coinAmount(q)} on Base`;
         const text =
           next.id === "approve"
-            ? `Step 1 of 2 on Base: allow Relay to take ${Number(q.payIn).toFixed(2)} USDC from this wallet for the transfer (${what}). Approve in PayBox; once it confirms, call freeze_fund again with the same arguments.`
-            : `Move ${what} through Relay. Approve in PayBox. It usually lands within a minute; then call freeze_lock again.`;
+            ? `Step 1 of 2 on Base: allow Relay to take ${coinAmount(q)} from this wallet for the transfer (${what}). Approve in PayBox; once it confirms, call freeze_fund again with the same arguments.`
+            : `Move ${what} through Relay. Approve in PayBox. It usually lands within a minute; then call freeze_lock again. Don't pay again for this freeze: if freeze_lock still says money is missing, wait 30 seconds and call it again.`;
         return { ...proposal, content: [{ type: "text" as const, text }] };
       }
       const [feedHex] = await readMany([{ to: ASSETS.ETH.feed, data: SEL.latestRoundData }]);
@@ -486,47 +504,57 @@ function createServer() {
     {
       title: "Freeze: pay the fee from Solana",
       description:
-        "Moves USDC from the user's PayBox Solana wallet to USDC.e on their Arbitrum wallet through Relay, plus a little ETH for network fees when the Arbitrum wallet has none. " +
-        "One Solana transaction, one approval. Funds land in under a minute; then call freeze_lock again with the same arguments as before.",
-      inputSchema: z.object({ usd: fundUsd, sender, solana_sender: solanaSender }).strict(),
+        "Moves USDC or SOL from the user's PayBox Solana wallet to USDC.e on their Arbitrum wallet through Relay, plus a little ETH for network fees when the Arbitrum wallet has none. " +
+        "It pays with USDC when the wallet has enough, otherwise with SOL. One Solana transaction, one approval. Funds land in under a minute; then call freeze_lock again with the same arguments as before.",
+      inputSchema: z
+        .object({
+          usd: fundUsd,
+          pay_with: z.enum(["usdc", "sol"]).optional().describe("Leave out to let Freeze pick from what the wallet holds."),
+          sender,
+          solana_sender: solanaSender,
+        })
+        .strict(),
       outputSchema: solanaOrNextStep,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ usd: dollars, sender: who, solana_sender: sol }) => {
-      const target = BigInt(Math.round((dollars ?? 3) * 1e6));
-      const gas = (await ethBalance(who)) < MIN_GAS_WEI ? GAS_TOPUP_USD6 : 0n;
-      const [lamports, held] = await Promise.all([solana.lamports(sol), solana.usdc(sol)]);
+    async ({ usd: dollars, pay_with, sender: who, solana_sender: sol }) => {
+      const target = BigInt(Math.round((dollars ?? 1) * 1e6));
+      const [arbEth, lamports, held] = await Promise.all([ethBalance(who), solana.lamports(sol), solana.usdc(sol)]);
+      const gas = arbEth < MIN_GAS_WEI ? GAS_TOPUP_USD6 : 0n;
       if (lamports !== undefined && lamports < solana.MIN_LAMPORTS)
         return nextStep(
           `Nothing was sent. This Solana wallet (${sol}) has no SOL, and every Solana transaction needs a tiny network fee paid in SOL (about $0.001). ` +
             `PayBox doesn't let anyone else pay that fee, so the wallet needs a few cents of SOL first (even $0.10 is plenty). Easiest ways: Fund Wallet in PayBox to buy a little SOL, or send a few cents of SOL from any exchange or wallet to ${sol}. ` +
             `Then call freeze_fund_solana again. If the user's Arbitrum or Base wallet already holds enough for the fee, paying from there works too.`,
         );
-      const short = (cost: string) =>
-        nextStep(
-          `Nothing was sent. This Solana wallet holds ${usd6(held ?? 0n)} of USDC, and bringing ${usd6(target)} over costs about ${cost} USDC. ` +
-            `Ask the user to add USDC on Solana, or bring a smaller amount with a lower usd (at least what freeze_lock asked for).`,
-        );
-      if (held !== undefined && held < target) return short(`${usd6(target)} plus Relay's small fee`);
+      const useUsdc = pay_with ? pay_with === "usdc" : held === undefined || held >= (target * 105n) / 100n + gas;
       let q: relay.RelayQuote;
       try {
-        q = await relay.quote({ from: "solana", user: sol, recipient: who, usdce6: target, gasUsd6: gas });
+        q = await relay.quote({ from: "solana", user: sol, recipient: who, usdce6: target, gasUsd6: gas, pay: useUsdc ? "usdc" : "native" });
       } catch (e) {
-        return nextStep(`Nothing was sent. ${(e as Error).message} Check this Solana wallet has USDC and a little SOL for fees, then try freeze_fund_solana again in a moment.`);
+        return nextStep(`Nothing was sent. ${(e as Error).message} Check this Solana wallet has USDC or SOL, then try freeze_fund_solana again in a moment.`);
       }
-      if (held !== undefined && held < BigInt(Math.ceil(Number(q.payIn) * 1e6))) return short(Number(q.payIn).toFixed(2));
+      // Keep a little SOL back for the network fee and any account the deposit opens.
+      const solReserve = 2_500_000n;
+      const short =
+        useUsdc ? held !== undefined && held < q.payInRaw : lamports !== undefined && BigInt(lamports) < q.payInRaw + solReserve;
+      if (short)
+        return nextStep(
+          `Nothing was sent. Bringing ${usd6(q.usdceOut)} over takes about ${coinAmount(q)}, and this Solana wallet holds ${usd6(held ?? 0n)} of USDC and ${((lamports ?? 0) / 1e9).toFixed(4)} SOL. ` +
+            `Ask the user to add a little USDC or SOL on Solana, or pay from Base or Arbitrum.`,
+        );
       const tx = relay.buildSolanaTx(sol, relay.solanaInstructions(q));
       const sim = await solana.simulate(tx);
       if (sim)
         return nextStep(
-          `Nothing was sent. A test run of this Solana transfer failed on Solana: ${sim}. Check the wallet has a little SOL for fees and enough USDC, then call freeze_fund_solana again.`,
+          `Nothing was sent. A test run of this Solana transfer failed on Solana: ${sim}. Check the wallet has a little SOL for fees and enough to pay, then call freeze_fund_solana again.`,
         );
       return {
         ...proposeSolana({ transactionBase64: tx }),
         content: [
           {
             type: "text" as const,
-            text: `Pay about ${Number(q.payIn).toFixed(2)} USDC from Solana to land ${usd6(q.usdceOut)} USDC.e${q.gasTopupUsd ? ` and $${Number(q.gasTopupUsd).toFixed(2)} of ETH for network fees` : ""} in ${who} on Arbitrum, through Relay. Approve in PayBox within about 4 minutes, before this proposal expires. It usually lands within a minute; then call freeze_lock again. Don't call freeze_fund_solana again for this freeze: if freeze_lock still says money is missing, wait 30 seconds and call freeze_lock again.`,
+            text: `Pay about ${coinAmount(q)} from Solana to land ${usd6(q.usdceOut)} USDC.e${q.gasTopupUsd ? ` and $${Number(q.gasTopupUsd).toFixed(2)} of ETH for network fees` : ""} in ${who} on Arbitrum, through Relay. Approve in PayBox within about 4 minutes, before this proposal expires. It usually lands within a minute; then call freeze_lock again. Don't call freeze_fund_solana again for this freeze: if freeze_lock still says money is missing, wait 30 seconds and call freeze_lock again.`,
           },
         ],
       };
@@ -577,10 +605,11 @@ function withHeadroom(data: string): string {
   return data.slice(0, 74) + ((amount * 103n) / 100n).toString(16).padStart(64, "0");
 }
 
-/** USDC.e to bring for fees: today's fee plus room for the next freezes, at least $3. */
+/** USDC.e to bring: this freeze's fee plus a little room, at least $1, minus what is already there. */
 function fundTarget(fee: bigint, have: bigint): bigint {
-  const want = (fee * 105n) / 100n + 500_000n;
-  const target = (want > 3_000_000n ? want : 3_000_000n) - (have < want ? have : 0n);
+  // Room for this fee and one more, so the next freeze is a single approval.
+  const want = fee * 2n + 250_000n;
+  const target = (want > 1_000_000n ? want : 1_000_000n) - (have < want ? have : 0n);
   return ((target + 9_999n) / 10_000n) * 10_000n; // whole cents
 }
 
@@ -598,8 +627,8 @@ const NEEDS_FUNDING = (who: string, target: bigint, fee: boolean, gas: boolean, 
     `This Arbitrum wallet (${who}) needs ${what} before it can freeze. Nothing has been bought. ` +
     `If a payment for this freeze was already approved in this conversation, don't pay again: wait 30 seconds and call freeze_lock again. ` +
     `Otherwise ask the user where to pay from, then call one of these and, once it lands (under a minute), call freeze_lock again with the same arguments: ` +
-    `USDC on Solana: freeze_fund_solana with usd ${dollars}, sender ${who} and solana_sender set to their PayBox Solana address. ` +
-    `USDC on Base: freeze_fund with from "base", usd ${dollars} and sender ${who}. ` +
+    `USDC or SOL on Solana: freeze_fund_solana with usd ${dollars}, sender ${who} and solana_sender set to their PayBox Solana address. ` +
+    `USDC or ETH on Base: freeze_fund with from "base", usd ${dollars} and sender ${who}. ` +
     `ETH on Arbitrum: send a few dollars of ETH to ${who}, then call freeze_lock again.`
   );
 };

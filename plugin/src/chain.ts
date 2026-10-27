@@ -108,3 +108,18 @@ export async function baseEthBalance(who: string): Promise<bigint | undefined> {
     return undefined;
   }
 }
+
+/** USDC on Base in micro USDC, or undefined if no Base RPC answered (best effort). */
+export async function baseUsdcBalance(who: string): Promise<bigint | undefined> {
+  const data = "0x70a08231" + who.slice(2).toLowerCase().padStart(64, "0");
+  const body = { jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", data }, "latest"] };
+  try {
+    return await withFallback(BASE_RPCS, body, (raw) => {
+      const res = raw as { result?: string };
+      if (!res.result) throw new Error("no result");
+      return BigInt(res.result);
+    });
+  } catch {
+    return undefined;
+  }
+}

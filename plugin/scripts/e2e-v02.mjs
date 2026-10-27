@@ -47,7 +47,7 @@ console.log("new wallet", owner);
 let r = await call("freeze_lock", args);
 check(!r.error && r.s?.next_step && /freeze_fund_solana/.test(r.text) && /don't pay again/.test(r.text), "freeze_lock on an empty wallet returns a next step (not an error) pointing to freeze_fund_solana");
 const usd = Number(/usd ([\d.]+)/.exec(r.text)?.[1]);
-check(usd >= 3, `asks to bring at least $3 (got $${usd})`);
+check(usd >= 1 && usd < 6, `asks to bring just the fee plus a little (got $${usd})`);
 
 // 2a. A Solana wallet with no SOL gets a plain next step, nothing proposed.
 r = await call("freeze_fund_solana", { usd, sender: owner, solana_sender: "EGp5tMXK9VVhE5n1LuGzAjbroXSeYZ8Wcstfy8UQc9vU" });
@@ -96,15 +96,24 @@ check(!r.error && r.s?.next_step && /usd 1[ ,]/.test(r.text), "no ETH for gas: n
 
 // 8. Base path.
 r = await call("freeze_fund", { from: "base", usd: 3, sender: owner });
-check(!r.error && !r.p && /no ETH on Base/.test(r.text), "Base path with no ETH on Base: told to add a little, nothing proposed");
+check(!r.error && !r.p && /Nothing was sent/.test(r.text) && /on Base/.test(r.text), "Base path with nothing on Base: told what is missing, nothing proposed");
 // A Base wallet that has ETH and USDC (seen holding a Relay allowance on Base).
-r = await call("freeze_fund", { from: "base", usd: 3, sender: "0xdc4cebf99cdc2185ff8b2bb3fc347ec3a7477311" });
+r = await call("freeze_fund", { from: "base", usd: 3, sender: "0x7a6ff068efe5cfdbafa96b71fd167bd6679855be" });
 check(!r.error && r.p?.chain === "eip155:8453", "freeze_fund from base with ETH on Base returns a Base proposal");
 check(r.p?.transaction.data.startsWith("0x095ea7b3") === false, "a wallet that already allowed Relay goes straight to the deposit");
 // A Base wallet with ETH but no Relay allowance: the allowance step, with 3% headroom.
 r = await call("freeze_fund", { from: "base", usd: 3, sender: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" });
 const amt = r.p?.transaction.data.startsWith("0x095ea7b3") ? BigInt("0x" + r.p.transaction.data.slice(74, 138)) : 0n;
 check(!r.error && amt > 3_000_000n * 103n / 100n, `allowance step has headroom (${Number(amt) / 1e6} USDC for a $3 transfer)`);
+
+// 9. The friend's wallet: ETH on Base, no USDC anywhere. Freeze pays with Base ETH in one transaction.
+const baseEthOnly = "0x4200000000000000000000000000000000000016"; // holds ETH on Base, no USDC
+r = await call("freeze_fund", { from: "base", usd: 1, sender: baseEthOnly });
+check(!r.error && r.p?.chain === "eip155:8453" && BigInt(r.p.transaction.value) > 0n && /ETH on Base/.test(r.text), "ETH on Base, no USDC: one Base transaction paying with ETH");
+
+// 10. SOL instead of USDC on Solana.
+r = await call("freeze_fund_solana", { usd: 1, pay_with: "sol", sender: owner, solana_sender: SOL });
+check(!r.error && r.p?.kind === "solana" && / SOL from Solana/.test(r.text), "SOL on Solana: one Solana transaction paying with SOL, test run passed");
 
 console.log(failures ? `\n${failures} FAILED` : "\nALL PASSED");
 process.exit(failures ? 1 : 0);

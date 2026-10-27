@@ -14,6 +14,9 @@ const USDCE = "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8";
 const ETH = "0x0000000000000000000000000000000000000000";
 
 export type From = keyof typeof USDC;
+/** The chain's own coin: SOL on Solana, ETH on Base. */
+export const NATIVE = { solana: "11111111111111111111111111111111", base: "0x0000000000000000000000000000000000000000" } as const;
+export type Pay = "usdc" | "native";
 
 type EvmData = { to: string; data: string; value: string; chainId: number };
 type SolanaIx = { programId: string; data: string; keys: { pubkey: string; isSigner: boolean; isWritable: boolean }[] };
@@ -21,7 +24,9 @@ type Step = { id: string; items: { status: string; data: EvmData | { instruction
 
 export type RelayQuote = {
   steps: Step[];
-  payIn: string; // human amount of USDC the user pays
+  payIn: string; // human amount the user pays, in the coin they pay with
+  payInRaw: bigint; // the same in base units (micro USDC, lamports or wei)
+  coin: string; // "USDC", "SOL" or "ETH"
   usdceOut: bigint; // 6 decimals
   gasTopupUsd?: string;
   seconds?: number;
@@ -32,13 +37,13 @@ export type RelayQuote = {
  * With `gasUsd6`, Relay also delivers that many dollars of ETH for network fees. If `usdce6` is 0,
  * only ETH is delivered.
  */
-export async function quote(opts: { from: From; user: string; recipient: string; usdce6: bigint; gasUsd6?: bigint; ethWei?: bigint }): Promise<RelayQuote> {
+export async function quote(opts: { from: From; user: string; recipient: string; usdce6: bigint; gasUsd6?: bigint; ethWei?: bigint; pay?: Pay }): Promise<RelayQuote> {
   const onlyGas = opts.usdce6 === 0n;
   const body: Record<string, unknown> = {
     user: opts.user,
     originChainId: CHAIN_ID[opts.from],
     destinationChainId: CHAIN_ID.arbitrum,
-    originCurrency: USDC[opts.from],
+    originCurrency: opts.pay === "native" ? NATIVE[opts.from] : USDC[opts.from],
     destinationCurrency: onlyGas ? ETH : USDCE,
     recipient: opts.recipient,
     amount: (onlyGas ? opts.ethWei ?? 0n : opts.usdce6).toString(),
@@ -60,12 +65,14 @@ export async function quote(opts: { from: From; user: string; recipient: string;
     const j = (await r.json()) as {
       message?: string;
       steps?: Step[];
-      details?: { currencyIn?: { amountFormatted?: string }; currencyOut?: { amount?: string }; currencyGasTopup?: { amountUsd?: string }; timeEstimate?: number };
+      details?: { currencyIn?: { amountFormatted?: string; amount?: string; currency?: { symbol?: string } }; currencyOut?: { amount?: string }; currencyGasTopup?: { amountUsd?: string }; timeEstimate?: number };
     };
     if (!r.ok || !j.steps?.length) throw new Error(`Relay could not quote this transfer: ${j.message ?? `HTTP ${r.status}`}`);
     return {
       steps: j.steps,
       payIn: j.details?.currencyIn?.amountFormatted ?? "?",
+      payInRaw: BigInt(j.details?.currencyIn?.amount ?? "0"),
+      coin: j.details?.currencyIn?.currency?.symbol ?? (opts.pay === "native" ? (opts.from === "solana" ? "SOL" : "ETH") : "USDC"),
       usdceOut: onlyGas ? 0n : BigInt(j.details?.currencyOut?.amount ?? "0"),
       gasTopupUsd: j.details?.currencyGasTopup?.amountUsd,
       seconds: j.details?.timeEstimate,

@@ -94,7 +94,7 @@ auto cash, freeze). After that, each freeze is one approval.
 ## New in v0.2
 
 - **Pay from where your money is.** `freeze_fund_solana` and `freeze_fund` with `from: "base"` move
-  just the fee, plus a little ETH for network fees, from your PayBox wallet on Solana or Base to
+  just the fee, plus a little ETH for network fees, from your PayBox wallet on Solana (USDC or SOL) or Base (USDC or ETH) to
   Arbitrum through [Relay](https://relay.link). One approval from Solana.
 - **Auto cash.** [`FreezeAutoCash`](contracts/src/FreezeAutoCash.sol) cashes a winning card in its last
   6 hours and always pays the card's owner. No admin, no upgrade, holds no money. A keeper on GitHub
