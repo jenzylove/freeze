@@ -1,17 +1,31 @@
 {
-  "updated": "2026-10-26T00:58:48Z",
-  "scannedTo": 518294190,
+  "updated": "2026-10-27T14:48:03Z",
+  "scannedTo": 518770622,
   "autoCashContract": "0x679399608d973c2476d1D9ECd8eB1150e97936Ec",
   "totals": {
-    "freezes": 3,
-    "people": 1,
-    "open": 1,
+    "freezes": 4,
+    "people": 2,
+    "open": 2,
     "paidOut": 0,
-    "feesPaid": 3.46,
+    "feesPaid": 4.33,
     "won": 0,
     "finished": 2
   },
   "cards": [
+    {
+      "card": "16717",
+      "buyer": "0xc2b718Eb224C4243cA3feEbA58a33D6Cb4186fb5",
+      "opened": 1793110474,
+      "buyTx": "0x8b75b839b3976c693890f63ef09470e1513d9a778c612aef6239eac55b6a6a3b",
+      "asset": "ETH",
+      "amount": 0.004299346156078905,
+      "frozenPrice": 2325.93506942,
+      "fee": 0.877359,
+      "ends": 1798294474,
+      "status": "open",
+      "worthNow": 0,
+      "autoCash": true
+    },
     {
       "card": "16713",
       "buyer": "0xed56612680268428B77B8dc806d61280f6673837",
