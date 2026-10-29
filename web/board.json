@@ -1,17 +1,31 @@
 {
-  "updated": "2026-10-27T14:48:03Z",
-  "scannedTo": 518770622,
+  "updated": "2026-10-29T01:08:43Z",
+  "scannedTo": 519216911,
   "autoCashContract": "0x679399608d973c2476d1D9ECd8eB1150e97936Ec",
   "totals": {
-    "freezes": 4,
-    "people": 2,
-    "open": 2,
+    "freezes": 5,
+    "people": 3,
+    "open": 3,
     "paidOut": 0,
-    "feesPaid": 4.33,
+    "feesPaid": 4.81,
     "won": 0,
     "finished": 2
   },
   "cards": [
+    {
+      "card": "16718",
+      "buyer": "0x4f75DE6206E1A47FC68c89EC910E0F0eD0656399",
+      "opened": 1793227181,
+      "buyTx": "0x2e78aaaecf0cfc465a031802a1b6a8ff75c950dfdb51d86f9a4d5c9efed5bb2b",
+      "asset": "BTC",
+      "amount": 0.00018466,
+      "frozenPrice": 81229.69162438,
+      "fee": 0.482305,
+      "ends": 1794436781,
+      "status": "open",
+      "worthNow": 0,
+      "autoCash": true
+    },
     {
       "card": "16717",
       "buyer": "0xc2b718Eb224C4243cA3feEbA58a33D6Cb4186fb5",
@@ -23,7 +37,7 @@
       "fee": 0.877359,
       "ends": 1798294474,
       "status": "open",
-      "worthNow": 0,
+      "worthNow": 0.07857,
       "autoCash": true
     },
     {
@@ -37,7 +51,7 @@
       "fee": 2.631032,
       "ends": 1798159363,
       "status": "open",
-      "worthNow": 0,
+      "worthNow": 0.223694,
       "autoCash": true
     },
     {
