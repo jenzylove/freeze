@@ -1,6 +1,6 @@
 {
-  "updated": "2026-10-29T01:08:43Z",
-  "scannedTo": 519216911,
+  "updated": "2026-11-01T08:41:50Z",
+  "scannedTo": 520227287,
   "autoCashContract": "0x679399608d973c2476d1D9ECd8eB1150e97936Ec",
   "totals": {
     "freezes": 5,
@@ -37,7 +37,7 @@
       "fee": 0.877359,
       "ends": 1798294474,
       "status": "open",
-      "worthNow": 0.07857,
+      "worthNow": 0,
       "autoCash": true
     },
     {
@@ -51,7 +51,7 @@
       "fee": 2.631032,
       "ends": 1798159363,
       "status": "open",
-      "worthNow": 0.223694,
+      "worthNow": 0,
       "autoCash": true
     },
     {
